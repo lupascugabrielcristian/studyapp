@@ -9,12 +9,11 @@ use mysql as my;
 
 mod sql_database;
 use crate::sql_database::db_operations;
-use crate::sql_database::models::{ Location, Question, Node};
+use crate::sql_database::models::{ Question, Node, NodeType};
 
 fn main() {
     let mut user_command = String::new();
     let mut conn:my::PooledConn = db_operations::connect();
-    let mut location: Location = Location::Initial;
 
     // Aici voi pune nodurile prin care am trecut pana la nodul curent
     // Ultimul element adaugat este nodul curent
@@ -29,7 +28,7 @@ fn main() {
         user_command = user_command.trim().to_owned();
 
         if user_command == "help" {
-            print_help();
+            print_help(&mut current_nodes);
         }
         else if user_command == "q" {
             // Add new question
@@ -42,31 +41,52 @@ fn main() {
             // List node
             list_node(&mut current_nodes, &mut conn);
         }
-        else if user_command == "list q" {
+        else if user_command == "show" {
+            // Show node content
+            show_node_content(&mut conn, &mut current_nodes );
+        }
+        else if user_command == "lq" {
             // List questions
-            list_questions( &mut conn );
+            list_questions(&mut current_nodes, &mut conn );
         }
         else if user_command.len() < 3 {
+            print_title();
+            print_header(&mut current_nodes);
+            print_content();
             println!("Not a command. help");
+            print_cursor(&mut current_nodes);
         }
-        else if &user_command[0..3].to_string() == "s q" {
+        else if &user_command[0..3].to_string() == "sq " {
             // Select a question
-            let argument = &user_command[4..];
+            let argument = &user_command[3..];
             select_question( argument, &mut conn, &mut current_nodes);
-            location = Location::Question;
         }
-        else if &user_command[0..3].to_string() == "a d" {
+        else if &user_command[0..3].to_string() == "sn " {
+            // Select a node
+            let argument = &user_command[3..];
+            select_node( argument, &mut conn, &mut current_nodes);
+        }
+        else if &user_command[0..3].to_string() == "out" {
+            // Node out 
+            move_out_current_node(&mut conn, &mut current_nodes);
+        }
+        else if &user_command[0..3].to_string() == "doc" {
             // Add documentation
             add_documentation( &mut conn, &mut current_nodes);
-            location = Location::Documentation;
         }
-        else if &user_command[0..3].to_string() == "a m" {
+        else if &user_command[0..3].to_string() == "am " {
             // Add documentation
             add_model( &mut conn, &mut current_nodes);
-            location = Location::Model;
         }
         else if user_command == "exit" {
             break;
+        }
+        else {
+            print_title();
+            print_header(&mut current_nodes);
+            print_content();
+            println!("{} is not a command. help", user_command);
+            print_cursor(&mut current_nodes);
         }
 
         user_command.clear();
@@ -75,42 +95,59 @@ fn main() {
 }
 
 
-fn print_cursor(current_nodes: &Vec<Node>) {
-    let (x, y) =terminal_size().unwrap();
-    println!("{goto}[?Location] ", goto = cursor::Goto(1,y - 1) );
-}
+fn print_help(current_nodes: &Vec<Node>) {
+    print_title();
+    print_header(current_nodes);
+    print_content();
 
-fn print_help() {
-    let help = "\nStudy commands\n\n\
-    help \t\t\t\t show this menu \n\
-    exit \t\t\t\t exit application\n\
-    \nSELECT FUNCTIONS\n\
-    select question(s q [index])\t select question [index]\n\
+    let help = "\
+    help \t\t show this menu \n\
+    exit \t\t exit application\n\
+    \nMOVE FUNCTIONS\n\
+    sq [index]\t select question [index]\n\
+    sn [index]\t select node [index]\n\
+    out\t\t move out of the current node\n\
     \nLIST FUNCTIONS\n\
-    list questions(list q)\t\t list all questions in database\n\
-    list node(ls)\t\t\t Lists the current node and the children
+    lq\t\t list all questions in database\n\
+    ls\t\t Lists the current node and the children\n\
+    show\t\t Show the content of the node \n\
     \nADD FUNCTIONS\n\
-    question(q)\t\t\t add root question with name\n\
-    add documentation(a d)\t\t Adds a URL for documentation to current node\n\
-    add model(a m)\t\t\t Adds a model to current node";
+    q\t\t add root question with name\n\
+    doc\t\t Adds a URL for documentation to current node\n\
+    am\t\t Adds a model to current node";
 
     println!("{}", help);
+    print_cursor(current_nodes);
 }
 
 fn print_title() {
     println!("{clear}{goto}{red}STUDY APP{reset}",
              clear = clear::All,
-             goto = cursor::Goto(4,2),
+             goto = cursor::Goto(4,1),
              red   = color::Fg(color::LightGreen),
              reset = color::Fg(color::Reset));
 }
 
-fn print_header() {
-    println!("{goto}{red}Aici pun {green}lista de noduri{reset}",
-             goto = cursor::Goto(4,3),
-             red   = color::Fg(color::Red),
-             green = color::Fg(color::Green),
-             reset = color::Fg(color::Reset));
+fn print_header(current_nodes: &Vec<Node>) {
+
+    println!("{goto}", goto = cursor::Goto(4,2) );
+
+    let mut header = "".to_string();
+
+    for node in current_nodes.iter() {
+
+        match node.node_type {
+            x if x == NodeType::Question as i32 => header += "[?]",
+            x if x == NodeType::Documentation as i32 => header += "[Doc]",
+            x if x == NodeType::Model as i32 => header += "[Model]",
+            _ => header += "",
+        };
+
+       header += &node.label; 
+       header.push(' '); 
+    }
+
+    println!("{}", header);
 }
 
 fn print_content() {
@@ -118,6 +155,37 @@ fn print_content() {
              goto = cursor::Goto(1,4),
              reset = color::Fg(color::Reset));
 }
+
+fn print_all_with_content(content: &str, current_nodes: &Vec<Node>) {
+    print_title();
+    print_header(current_nodes);
+    print_content();
+    println!("{}", content);
+    print_cursor(current_nodes);
+}
+
+
+fn print_cursor(current_nodes: &Vec<Node>) {
+    let (_x, y) =terminal_size().unwrap();
+    
+    if current_nodes.len() == 0 {
+        println!("{goto}[-:] ", goto = cursor::Goto(1,y - 2));
+    }
+    else {
+        match current_nodes.get( current_nodes.len() - 1 ) {
+            None => println!("{goto}[-:] ", goto = cursor::Goto(1,y - 1)),
+            Some(node) => println!("{goto}[{n}]: ", goto = cursor::Goto(1,y - 1), n = node.node_type ),
+        }
+    }
+}
+
+fn print_cursor_for_input(input_text: &str) {
+    let (_x, y) =terminal_size().unwrap();
+    println!("{goto}{input} - ",
+             goto = cursor::Goto(1, y-1),
+             input = input_text);
+}
+
 
 
 fn ask_question() -> String {
@@ -132,16 +200,31 @@ fn ask_question() -> String {
 fn add_documentation( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
     let parent_node_id = current_nodes.get( current_nodes.len() - 1 ).unwrap().node_id;
 
-    println!("[Doc label ?-]");
+    // Cer input de la user pentru label
+    print_title();
+    print_header(current_nodes);
+    print_cursor_for_input("Doc label");
     let mut label = String::new();
     stdin().read_line(&mut label).expect("Din not enter correct string");
 
-    println!("[Doc content ?-]");
+    // Cer input de la user pentru content
+    print_title();
+    print_header(current_nodes);
+    print_cursor_for_input("Doc content");
     let mut documentation = String::new();
     stdin().read_line(&mut documentation).expect("Din not enter correct string");
 
     documentation = documentation.trim().to_string(); 
     db_operations::save_documentation(&label, &documentation, parent_node_id, conn);
+
+    // Updatez current_nodes
+    current_nodes.pop();
+    match db_operations::get_node( parent_node_id, conn ) {
+        None => {},
+        Some(updated_node) => current_nodes.push(updated_node),
+    };
+
+    print_all_with_content("Doc saved", current_nodes);
 }
 
 /// Adaug model la ultimul nod in care am intrat. Nu intru in noul nod, dupa ce il adaug
@@ -163,7 +246,7 @@ fn add_model( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
 }
 
 
-fn list_questions( conn: &mut my::PooledConn ) {
+fn list_questions(current_nodes: &mut Vec<Node>, conn: &mut my::PooledConn ) {
     let query = "SELECT * from questions";
 
     let questions: Vec<Question> = 
@@ -177,36 +260,47 @@ fn list_questions( conn: &mut my::PooledConn ) {
         }).collect()
     }).unwrap(); // Unwrap `Vec<Question>`
 
+    print_title();
+    print_header(current_nodes);
+    print_content();
+
     let _v: Vec<_> = questions.iter().map( |q| println!("{}. {}", q.node_id, q.question_text) ).collect();
+
+    print_cursor(current_nodes);
 }
 
 fn list_node(current_nodes: &mut Vec<Node>, conn: &mut my::PooledConn ) {
+    if current_nodes.len() == 0 {
+        print_all_with_content("No current selection", current_nodes );
+        return;
+    }
+
+
     print_title();
-    print_header();
+    print_header(current_nodes);
     print_content();
 
-    for i in 0..current_nodes.len() {
+    let current_node = current_nodes.get( current_nodes.len() - 1 );
 
-        // Printez nodul parinte
-        println!("{}", current_nodes.get(i).unwrap().label);
-        let node = db_operations::get_node( current_nodes.get(i).unwrap().node_id, conn );
+    // Printez nodul parinte
+    println!("Current node: {}", current_node.unwrap().label );
 
-        // Printez ce copii are
-        let header: String = iter::repeat("|__ ").take(i + 1).collect();
-        
-        node.unwrap().child_nodes.split(" ").for_each(|child_node_id| {
-            match child_node_id.parse::<i32>() {
-                Ok(n_id) => {
-                    let child_node = db_operations::get_node( n_id, conn );
-                    match child_node {
-                        Some(mut cn) => { println!("{}{}", header, &cn.to_string()) },
-                        None => {}
-                    }
-                },
-                Err(_e) => {}
-            }
-        });
-    }
+    // Tree sunt liniile de la inceput care arata ramificatiile
+    let tree: String = iter::repeat(" |__ ").take(1).collect();
+    
+    // Printez ce copii are
+    current_node.unwrap().child_nodes.split(" ").for_each(|child_node_id| {
+        match child_node_id.parse::<i32>() {
+            Ok(n_id) => {
+                let child_node = db_operations::get_node( n_id, conn );
+                match child_node {
+                    Some(mut cn) => { println!("{}{}", tree, &cn.to_string()) },
+                    None => {}
+                }
+            },
+            Err(_e) => {}
+        }
+    });
 
     print_cursor(current_nodes);
 }
@@ -235,9 +329,70 @@ fn select_question( argument: &str, conn: &mut my::PooledConn, current_nodes: &m
     current_nodes.push(node.unwrap());
 
     print_title();
-    print_header();
+    print_header(current_nodes);
     print_cursor(current_nodes);
     
     let mut first_question_iter = questions.drain(0..1);
     return first_question_iter.next();
+}
+
+
+fn select_node( argument: &str, conn: &mut my::PooledConn, current_nodes: &mut Vec<Node>) {
+    let node_id: i32 = argument.parse().expect("That was not a number");
+
+    match db_operations::get_node( node_id, conn ) {
+        None => { 
+            print_title();
+            print_header(current_nodes);
+            print_content();
+            println!("Node {} not found", node_id);
+            print_cursor(current_nodes);
+        },
+        Some(node) => {
+            current_nodes.push(node);
+            show_node_content(conn, current_nodes);
+            //print_title();
+            //print_header(current_nodes);
+            //print_content();
+            //print_cursor(current_nodes);
+        },
+    }
+    
+}
+
+fn move_out_current_node(conn: &mut my::PooledConn, current_nodes: &mut Vec<Node>) {
+    current_nodes.pop();
+
+    //print_title();
+    //print_header(current_nodes);
+    //print_cursor(current_nodes);
+    show_node_content(conn, current_nodes);
+}
+
+fn show_node_content(conn: &mut my::PooledConn, current_nodes: &mut Vec<Node>) {
+    let current_node = current_nodes.get( current_nodes.len() - 1 ).unwrap();
+
+    // Functie de ce tip este, caut un tabela corespunzatoare contentul si il afisez in sectiunea
+    // content
+    match current_node.node_type {
+        x if x == NodeType::Question as i32 => { 
+            match db_operations::get_question(current_node.node_id, conn) {
+                None => print_all_with_content("Question not found", current_nodes ),
+                Some(question) => print_all_with_content( &question.question_text, current_nodes ),
+            }
+        },
+        x if x == NodeType::Documentation as i32 => {
+            match db_operations::get_documentation(current_node.node_id, conn) {
+                None => print_all_with_content("Documentation not found", current_nodes ),
+                Some(documentation) => print_all_with_content( &documentation.content, current_nodes ),
+            }
+        },
+        x if x == NodeType::Model as i32 => {
+            match db_operations::get_model(current_node.node_id, conn) {
+                None => print_all_with_content( "Model not found", current_nodes ),
+                Some(model) => print_all_with_content( &model.content, current_nodes ),
+            }
+        },
+        _ => {},
+    };
 }

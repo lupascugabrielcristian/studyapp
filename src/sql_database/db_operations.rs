@@ -1,6 +1,6 @@
 use mysql as my;
 
-use crate::sql_database::models::Node;
+use crate::sql_database::models::{ Node, Question, Documentation, Model };
 
 pub fn connect() -> my::PooledConn {
     let pool = my::Pool::new("mysql://root:studymqsql@localhost:3306/mysql").unwrap();
@@ -63,6 +63,10 @@ pub fn get_node( node_id: i32, conn: &mut my::PooledConn) -> Option<Node> {
         }).collect()
     }).unwrap();
 
+    if found_nodes.len() == 0 {
+        return None
+    }
+
     return found_nodes.drain(0..1).next();
 }
 
@@ -100,8 +104,6 @@ pub fn save_documentation( label: &String, documentation: &String, parent_id: i3
             t.query(add_node_query).unwrap();
             t.commit()
         }).unwrap();
-
-    println!("[+] doc saved");
 }
 
 
@@ -124,6 +126,74 @@ pub fn save_model( label: &String, documentation: &String, parent_id: i32, conn:
         }).unwrap();
 
     println!("[+] model saved");
+}
+
+pub fn get_question(node_id:i32, conn: &mut my::PooledConn) -> Option<Question> {
+    let query = "SELECT * FROM questions WHERE node_id=':node_id'";
+    let query = query.replace(":node_id", &node_id.to_string() );
+
+    let mut found_questions: Vec<Question> =
+    conn.prep_exec(query, ()).map( |result| {
+        result.map(|x| x.unwrap()).map(|row| {
+            let ( node_id, question_text ) = my::from_row(row);
+            Question {
+                node_id,
+                question_text,
+            }
+        }).collect()
+    }).unwrap();
+
+    if found_questions.len() == 0 {
+        return None
+    }
+
+    return found_questions.drain(0..1).next();
+}
+
+
+pub fn get_documentation(node_id:i32, conn: &mut my::PooledConn) -> Option<Documentation> {
+    let query = "SELECT * FROM documentation WHERE node_id=':node_id'";
+    let query = query.replace(":node_id", &node_id.to_string() );
+
+    let mut found: Vec<Documentation> =
+    conn.prep_exec(query, ()).map( |result| {
+        result.map(|x| x.unwrap()).map(|row| {
+            let ( node_id, content ) = my::from_row(row);
+            Documentation {
+                node_id,
+                content,
+            }
+        }).collect()
+    }).unwrap();
+
+    if found.len() == 0 {
+        return None
+    }
+
+    return found.drain(0..1).next();
+}
+
+
+pub fn get_model(node_id:i32, conn: &mut my::PooledConn) -> Option<Model> {
+    let query = "SELECT * FROM models WHERE node_id=':node_id'";
+    let query = query.replace(":node_id", &node_id.to_string() );
+
+    let mut found: Vec<Model> =
+    conn.prep_exec(query, ()).map( |result| {
+        result.map(|x| x.unwrap()).map(|row| {
+            let ( node_id, content ) = my::from_row(row);
+            Model {
+                node_id,
+                content,
+            }
+        }).collect()
+    }).unwrap();
+
+    if found.len() == 0 {
+        return None
+    }
+
+    return found.drain(0..1).next();
 }
 
 

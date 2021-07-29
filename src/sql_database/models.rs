@@ -4,11 +4,16 @@ pub struct Question {
     pub question_text: String,
 }
 
-struct Documentation {
+pub struct Documentation {
     pub node_id: i32,
     pub content: String,
 }
  
+pub struct Model {
+    pub node_id: i32,
+    pub content: String,
+}
+
 pub struct Node {
     pub node_id: i32,
     pub node_type: i32,
@@ -19,9 +24,11 @@ pub struct Node {
 
 impl Node {
     pub fn to_string(&mut self) -> String {
-        let types: [&str; 4] = ["?", "Doc", "Model", "."];
+        let types: [&str; 4] = ["?", "Doc  ", "Model", "."];
 
         let mut describe: String = "[:type] ".to_string();
+        describe += "[:id] ";
+        describe = describe.replace(":id", &self.node_id.to_string());
         describe += &self.label.trim();
         describe = describe.replace(":type", types[self.node_type as usize]);
 
@@ -29,17 +36,16 @@ impl Node {
     }
 }
 
+pub enum NodeType {
+    Question = 0,
+    Documentation = 1,
+    Model = 2,
+}
+
+
 // Pentru a salva in baza de date folosesc valorile:
 // question: 0,
 // documentation: 1, 
 // model: 2, 
 // new term: 3
 // try: 4
-pub enum Location {
-    Question,
-    Documentation,
-    Model,
-    //NewTerm,
-    //Try,
-    Initial
-}
