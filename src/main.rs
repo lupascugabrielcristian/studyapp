@@ -4,7 +4,7 @@ extern crate mysql;
 
 use std::io::stdin;
 use std::iter;
-use termion::{color, clear, cursor};
+use termion::{ color, clear, cursor, terminal_size };
 use mysql as my;
 
 mod sql_database;
@@ -12,14 +12,6 @@ use crate::sql_database::db_operations;
 use crate::sql_database::models::{ Location, Question, Node};
 
 fn main() {
-
-
-    println!("{clear}{goto}{red}STUDY APP{reset}",
-             clear = clear::All,
-             goto = cursor::Goto(4,2),
-             red   = color::Fg(color::LightGreen),
-             reset = color::Fg(color::Reset));
-
     let mut user_command = String::new();
     let mut conn:my::PooledConn = db_operations::connect();
     let mut location: Location = Location::Initial;
@@ -28,8 +20,10 @@ fn main() {
     // Ultimul element adaugat este nodul curent
     let mut current_nodes: Vec<Node> = Vec::new();
 
+    print_title();
+    print_cursor(&current_nodes);
+
     loop {
-        print_cursor(&current_nodes, &location);
 
         stdin().read_line( &mut user_command ).expect("Din not enter corect string");
         user_command = user_command.trim().to_owned();
@@ -80,18 +74,10 @@ fn main() {
 
 }
 
-fn print_cursor(current_nodes: &Vec<Node>, location: &Location) {
-    let nodes_i = current_nodes.iter();
-    for node in nodes_i {
-        match location {
-            Location::Initial => println!("->"),
-            Location::Question => println!("{} -?", node.label),
-            Location::Model => println!("{} -M", node.label),
-            Location::Documentation => println!("{} -D", node.label)
-        }
 
-        println!("\t");
-    }
+fn print_cursor(current_nodes: &Vec<Node>) {
+    let (x, y) =terminal_size().unwrap();
+    println!("{goto}[?Location] ", goto = cursor::Goto(1,y - 1) );
 }
 
 fn print_help() {
@@ -109,6 +95,28 @@ fn print_help() {
     add model(a m)\t\t\t Adds a model to current node";
 
     println!("{}", help);
+}
+
+fn print_title() {
+    println!("{clear}{goto}{red}STUDY APP{reset}",
+             clear = clear::All,
+             goto = cursor::Goto(4,2),
+             red   = color::Fg(color::LightGreen),
+             reset = color::Fg(color::Reset));
+}
+
+fn print_header() {
+    println!("{goto}{red}Aici pun {green}lista de noduri{reset}",
+             goto = cursor::Goto(4,3),
+             red   = color::Fg(color::Red),
+             green = color::Fg(color::Green),
+             reset = color::Fg(color::Reset));
+}
+
+fn print_content() {
+    println!("{goto}{reset}",
+             goto = cursor::Goto(1,4),
+             reset = color::Fg(color::Reset));
 }
 
 
@@ -173,6 +181,10 @@ fn list_questions( conn: &mut my::PooledConn ) {
 }
 
 fn list_node(current_nodes: &mut Vec<Node>, conn: &mut my::PooledConn ) {
+    print_title();
+    print_header();
+    print_content();
+
     for i in 0..current_nodes.len() {
 
         // Printez nodul parinte
@@ -195,6 +207,8 @@ fn list_node(current_nodes: &mut Vec<Node>, conn: &mut my::PooledConn ) {
             }
         });
     }
+
+    print_cursor(current_nodes);
 }
 
 // Vreau sa primesc aici un numar. Numarul reprezinta id-ul randului question din tabela questions
@@ -219,6 +233,10 @@ fn select_question( argument: &str, conn: &mut my::PooledConn, current_nodes: &m
     let node = db_operations::get_node( question_index, conn );
     current_nodes.clear();
     current_nodes.push(node.unwrap());
+
+    print_title();
+    print_header();
+    print_cursor(current_nodes);
     
     let mut first_question_iter = questions.drain(0..1);
     return first_question_iter.next();
