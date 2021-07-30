@@ -54,6 +54,10 @@ fn main() {
             // List questions
             list_questions(&mut current_nodes, &mut conn );
         }
+        else if user_command == "all" {
+            // Show all nodes tree
+            list_all_nodes_tree(&mut current_nodes, &mut conn );
+        }
         else if user_command.len() > 3 && &user_command[0..3].to_string() == "sq " {
             // Select a question
             let argument = &user_command[3..];
@@ -75,6 +79,9 @@ fn main() {
         else if user_command == "term" {
             // Add new term
             add_new_term( &mut conn, &mut current_nodes );
+        }
+        else if user_command == "explain" {
+            add_explanation( &mut conn, &mut current_nodes );
         }
         else if user_command.len() < 3 {
             print_title();
@@ -116,11 +123,13 @@ fn print_help(current_nodes: &Vec<Node>) {
     lq\t\t list all questions in database\n\
     ls\t\t Lists the current node and the children\n\
     show\t\t Show the content of the node \n\
+    all\t\t Show all the nodes tree\n\
     \nADD FUNCTIONS\n\
     q\t\t add root question with name\n\
     doc\t\t Adds a URL for documentation to current node\n\
     am\t\t Adds a model to current node\n\
-    term\t\t Adds a new term to current node";
+    term\t\t Adds a new term to current node\n\
+    explain\t\t Adds a new explanation for a TERM node";
 
     println!("{}", help);
     print_cursor(current_nodes);
@@ -135,8 +144,13 @@ fn print_title() {
 }
 
 fn print_header(current_nodes: &Vec<Node>) {
+    let (x, _y) =terminal_size().unwrap();
 
-    println!("{goto}", goto = cursor::Goto(4,2) );
+    // Print first line
+    println!("{goto}", goto = cursor::Goto(4,1) );
+    let line: String = iter::repeat("=").take(x.into()).collect();
+    println!("{}", line);
+
 
     let mut header = "".to_string();
 
@@ -144,9 +158,9 @@ fn print_header(current_nodes: &Vec<Node>) {
 
         match node.node_type {
             x if x == NodeType::Question as i32 => header += "[?]",
-            x if x == NodeType::Documentation as i32 => header += "[Doc]",
-            x if x == NodeType::Model as i32 => header += "[Model]",
-            x if x == NodeType::Term as i32 => header += "[Term]",
+            x if x == NodeType::Documentation as i32 => header += "[D]",
+            x if x == NodeType::Model as i32 => header += "[M]",
+            x if x == NodeType::Term as i32 => header += "[T]",
             _ => header += "",
         };
 
@@ -155,6 +169,8 @@ fn print_header(current_nodes: &Vec<Node>) {
     }
 
     println!("{}", header);
+    // Print second line
+    println!("{}", line);
 }
 
 fn print_content() {
@@ -231,7 +247,7 @@ fn add_documentation( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> )
     documentation = documentation.trim().to_string(); 
     db_operations::save_documentation(&label, &documentation, parent_node_id, conn);
 
-    // Updatez current_nodes
+    // Updatez nodul curent
     current_nodes.pop();
     match db_operations::get_node( parent_node_id, conn ) {
         None => {},
@@ -258,7 +274,7 @@ fn add_model( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
 
     db_operations::save_model(&label, &model, parent_node_id, conn);
 
-    // Updatez current_nodes
+    // Updatez nodul curent
     current_nodes.pop();
     match db_operations::get_node( parent_node_id, conn ) {
         None => {},
@@ -289,6 +305,34 @@ fn add_new_term( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
     };
 
     print_all_with_content("Term saved", current_nodes);
+}
+
+
+fn add_explanation( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
+    if current_nodes.get( current_nodes.len() - 1 ).unwrap().node_type != NodeType::Term as i32  {
+        print_all_with_content("Not in a TERM node!", current_nodes);
+        return;
+    }
+
+    let term_id = current_nodes.get( current_nodes.len() - 1 ).unwrap().node_id;
+
+    print_title();
+    print_header(current_nodes);
+    print_cursor_for_input("New explanation:");
+    let mut explanation = String::new();
+    stdin().read_line(&mut explanation).expect("Did not enter correct string");
+    explanation = explanation.trim().to_string();
+
+    db_operations::update_explanation(&explanation, term_id, conn); 
+
+    // Updatez current_nodes
+    current_nodes.pop();
+    match db_operations::get_node( term_id, conn ) {
+        None => {},
+        Some(updated_node) => current_nodes.push(updated_node),
+    };
+
+    print_all_with_content("Term updated", current_nodes);
 }
 
 
@@ -349,6 +393,42 @@ fn list_node(current_nodes: &mut Vec<Node>, conn: &mut my::PooledConn ) {
     });
 
     print_cursor(current_nodes);
+}
+
+fn list_all_nodes_tree(current_nodes: &mut Vec<Node>, conn: &mut my::PooledConn ) {
+    let level = 0;
+    let question = current_nodes.get(0).unwrap();
+
+    print_title();
+    print_header(current_nodes);
+    print_content();
+    println!("[Q]{}", question.label);
+    
+    print_children_at_level(&question.child_nodes, level, conn);
+    print_cursor(current_nodes);
+}
+
+fn print_children_at_level(child_ids: &str, level: i32, conn: &mut my::PooledConn ) {
+    let tree: String = iter::repeat("    ").take(level as usize).collect();
+
+    child_ids.split(" ").for_each(| child_node_id | {
+        match child_node_id.parse::<i32>() {
+            Ok(n_id) => {
+                let child_node = db_operations::get_node( n_id, conn );
+                match child_node {
+                    Some(mut cn) => { 
+                        println!("  {}|__ {}", tree, &cn.to_short_string());
+                        if cn.child_nodes.len() > 0 {
+                            print_children_at_level(&cn.child_nodes, level + 1, conn);
+                        }
+                    },
+                    None => {}
+                }
+            },
+            Err(_e) => {}
+        }
+    });
+
 }
 
 // Vreau sa primesc aici un numar. Numarul reprezinta id-ul randului question din tabela questions

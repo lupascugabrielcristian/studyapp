@@ -152,8 +152,18 @@ pub fn save_term( term: &str, parent_id: i32, conn: &mut my::PooledConn ) {
             t.query(add_node_query).unwrap();
             t.commit()
         }).unwrap();
+}
 
-    println!("[+] new term saved");
+pub fn update_explanation( explanation: &str, term_id: i32, conn: &mut my::PooledConn ) {
+    let update_query = "UPDATE mysql.terms SET explanation=\":new_explanation\" WHERE node_id=\":term_id\"";
+    let update_query = update_query.replace(":new_explanation", explanation );
+    let update_query = update_query.replace(":term_id", &term_id.to_string());
+
+    conn.start_transaction(false, None, None)
+        .and_then(|mut t| {
+            t.query(update_query).unwrap();
+            t.commit()
+        }).unwrap();
 }
 
 
