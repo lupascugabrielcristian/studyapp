@@ -398,18 +398,19 @@ fn list_node(current_nodes: &mut Vec<Node>, conn: &mut my::PooledConn ) {
 fn list_all_nodes_tree(current_nodes: &mut Vec<Node>, conn: &mut my::PooledConn ) {
     let level = 0;
     let question = current_nodes.get(0).unwrap();
+    let current_node_id = current_nodes.get( current_nodes.len() - 1).unwrap().node_id;
 
     print_title();
     print_header(current_nodes);
     print_content();
     println!("[Q]{}", question.label);
     
-    print_children_at_level(&question.child_nodes, level, conn);
+    print_children_at_level(&question.child_nodes, level, conn, current_node_id);
     print_cursor(current_nodes);
 }
 
-fn print_children_at_level(child_ids: &str, level: i32, conn: &mut my::PooledConn ) {
-    let tree: String = iter::repeat("    ").take(level as usize).collect();
+fn print_children_at_level(child_ids: &str, level: i32, conn: &mut my::PooledConn, current_node_id: i32 ) {
+    let space: String = iter::repeat("    ").take(level as usize).collect();
 
     child_ids.split(" ").for_each(| child_node_id | {
         match child_node_id.parse::<i32>() {
@@ -417,9 +418,17 @@ fn print_children_at_level(child_ids: &str, level: i32, conn: &mut my::PooledCon
                 let child_node = db_operations::get_node( n_id, conn );
                 match child_node {
                     Some(mut cn) => { 
-                        println!("  {}|__ {}", tree, &cn.to_short_string());
+                        // vreau sa stiu daca este current node
+                        let is_current = if cn.node_id == current_node_id {
+                            true
+                        }
+                        else {
+                            false
+                        };
+
+                        print_line_with_colors(&space, &cn.to_short_string(), cn.node_type, is_current);
                         if cn.child_nodes.len() > 0 {
-                            print_children_at_level(&cn.child_nodes, level + 1, conn);
+                            print_children_at_level(&cn.child_nodes, level + 1, conn, current_node_id);
                         }
                     },
                     None => {}
@@ -429,6 +438,43 @@ fn print_children_at_level(child_ids: &str, level: i32, conn: &mut my::PooledCon
         }
     });
 
+}
+
+fn print_line_with_colors(space: &str, desc: &str, node_type: i32, is_current: bool) {
+    if is_current {
+            println!(" {sp}  |__ {color}{desc}{reset}", 
+                    sp = space,
+                    color = color::Fg(color::Red),
+                    desc = desc,
+                    reset = color::Fg(color::Reset));
+    }
+
+    match node_type {
+        x if x == NodeType::Documentation as i32 => {
+            println!(" {sp}  |__ {color}{desc}{reset}", 
+                    sp = space,
+                    color = color::Fg(color::LightGreen),
+                    desc = desc,
+                    reset = color::Fg(color::Reset));
+        },
+        x if x == NodeType::Model as i32 => {
+            println!(" {sp}  |__ {color}{desc}{reset}", 
+                    sp = space,
+                    color = color::Fg(color::LightBlue),
+                    desc = desc,
+                    reset = color::Fg(color::Reset));
+        },
+        x if x == NodeType::Term as i32 => {
+            println!(" {sp}  |__ {color}{desc}{reset}", 
+                    sp = space,
+                    color = color::Fg(color::Yellow),
+                    desc = desc,
+                    reset = color::Fg(color::Reset));
+        },
+        _ => {
+            println!(" {}  |__ {}", space, desc);
+        },
+    };
 }
 
 // Vreau sa primesc aici un numar. Numarul reprezinta id-ul randului question din tabela questions
