@@ -14,6 +14,12 @@ pub struct Model {
     pub content: String,
 }
 
+pub struct Term {
+    pub node_id: i32,
+    pub term: String,
+    pub explanation: String,
+}
+
 pub struct Node {
     pub node_id: i32,
     pub node_type: i32,
@@ -24,7 +30,7 @@ pub struct Node {
 
 impl Node {
     pub fn to_string(&mut self) -> String {
-        let types: [&str; 4] = ["?", "Doc  ", "Model", "."];
+        let types: [&str; 5] = ["?", "Doc  ", "Model", "Term",  "."];
 
         let mut describe: String = "[:type] ".to_string();
         describe += "[:id] ";
@@ -40,6 +46,7 @@ pub enum NodeType {
     Question = 0,
     Documentation = 1,
     Model = 2,
+    Term = 3,
 }
 
 

@@ -5,7 +5,4 @@ TODO
 - tabela cu intrebari sa aiba coloana de node_id
 	- cand adaug o intrebare noua mai intai sa adaug si un rand in tabela "nodes"
 	- dupa ce adaug nodul in tabela "nodes", sa iau id-ul randului introdus si sa il pun in tabela "questions"
-- Display:
-	- cum aflu cate linii am la dispozitie?
-	- sa scriu titlul si nodurile curente pe linia de sus
-	- sa pun cursorul pentru comanda jos
+- Intrebarea sa aiba si content

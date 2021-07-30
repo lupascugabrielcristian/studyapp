@@ -1,6 +1,6 @@
 use mysql as my;
 
-use crate::sql_database::models::{ Node, Question, Documentation, Model };
+use crate::sql_database::models::{ Node, Question, Documentation, Model, Term };
 
 pub fn connect() -> my::PooledConn {
     let pool = my::Pool::new("mysql://root:studymqsql@localhost:3306/mysql").unwrap();
@@ -37,7 +37,15 @@ pub fn connect() -> my::PooledConn {
     // | node_id | content |
     if check_for_table(&mut conn, "\'models\'") == false {
         println!("Creating models table");
-        let create_table = "CREATE TABLE models ( node_id int NOT NULL, content TEXT NULL)";
+        let create_table = "CREATE TABLE models ( node_id int NOT NULL, content TEXT NOT NULL)";
+        pool.prep_exec(create_table, ()).unwrap();
+    }
+
+    // New Term table
+    // | node_id | term | explanation |
+    if check_for_table(&mut conn, "\'terms\'") == false {
+        println!("Creating terms table");
+        let create_table = "CREATE TABLE terms ( node_id int NOT NULL, term TEXT NOT NULL, explanation TEXT)";
         pool.prep_exec(create_table, ()).unwrap();
     }
 
@@ -83,7 +91,6 @@ pub fn save_question( question_text: &String, conn: &mut my::PooledConn ) {
             t.commit()
         }).unwrap();
 
-    println!("[+] question saved");
 }
 
 pub fn save_documentation( label: &String, documentation: &String, parent_id: i32, conn: &mut my::PooledConn ) {
@@ -125,8 +132,30 @@ pub fn save_model( label: &String, documentation: &String, parent_id: i32, conn:
             t.commit()
         }).unwrap();
 
-    println!("[+] model saved");
 }
+
+
+pub fn save_term( term: &str, parent_id: i32, conn: &mut my::PooledConn ) {
+    // Salvez in nodes table si folosesc id-ul generat acolo ca sa salvez in terms table
+    // Updatez nodul parinte sa adaug acest nod ca si child node
+    let add_node_query = "INSERT INTO mysql.nodes ( node_type, child_nodes, parent_node, label ) VALUES(\"3\", \"\", \":parent_id\", \":label\");
+                        SELECT LAST_INSERT_ID() INTO @id;
+                        INSERT INTO mysql.terms( node_id, term, explanation ) VALUES( @id, \":new_term\", \"\");
+                        UPDATE mysql.nodes SET child_nodes=CONCAT(child_nodes,' ',@id) WHERE node_id=\":p_i_d\"";
+    let add_node_query = add_node_query.replace(":parent_id", &parent_id.to_string());
+    let add_node_query = add_node_query.replace(":label", term);
+    let add_node_query = add_node_query.replace(":new_term", term);
+    let add_node_query = add_node_query.replace(":p_i_d", &parent_id.to_string());
+
+    conn.start_transaction(false, None, None)
+        .and_then(|mut t| {
+            t.query(add_node_query).unwrap();
+            t.commit()
+        }).unwrap();
+
+    println!("[+] new term saved");
+}
+
 
 pub fn get_question(node_id:i32, conn: &mut my::PooledConn) -> Option<Question> {
     let query = "SELECT * FROM questions WHERE node_id=':node_id'";
@@ -185,6 +214,29 @@ pub fn get_model(node_id:i32, conn: &mut my::PooledConn) -> Option<Model> {
             Model {
                 node_id,
                 content,
+            }
+        }).collect()
+    }).unwrap();
+
+    if found.len() == 0 {
+        return None
+    }
+
+    return found.drain(0..1).next();
+}
+
+pub fn get_term(node_id: i32, conn: &mut my::PooledConn) -> Option<Term> {
+    let query = "SELECT * FROM terms WHERE node_id=':node_id'";
+    let query = query.replace(":node_id", &node_id.to_string() );
+
+    let mut found: Vec<Term> =
+    conn.prep_exec(query, ()).map( |result| {
+        result.map(|x| x.unwrap()).map(|row| {
+            let ( node_id, term, explanation ) = my::from_row(row);
+            Term {
+                node_id,
+                term,
+                explanation,
             }
         }).collect()
     }).unwrap();

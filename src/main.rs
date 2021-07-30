@@ -4,6 +4,7 @@ extern crate mysql;
 
 use std::io::stdin;
 use std::iter;
+use std::fs;
 use termion::{ color, clear, cursor, terminal_size };
 use mysql as my;
 
@@ -27,15 +28,19 @@ fn main() {
         stdin().read_line( &mut user_command ).expect("Din not enter corect string");
         user_command = user_command.trim().to_owned();
 
-        if user_command == "help" {
+        if user_command.len() == 0 {
+            print_help(&mut current_nodes);
+        }
+        else if user_command == "help" {
             print_help(&mut current_nodes);
         }
         else if user_command == "q" {
             // Add new question
-            let user_input = ask_question();
-            println!("{}", user_input);
-            let question_text = String::from(user_input);
-            db_operations::save_question( &question_text, &mut conn );
+            ask_question(&mut current_nodes, &mut conn);
+        }
+        else if user_command == "am" {
+            // Add model
+            add_model( &mut conn, &mut current_nodes);
         }
         else if user_command == "ls" {
             // List node
@@ -49,34 +54,34 @@ fn main() {
             // List questions
             list_questions(&mut current_nodes, &mut conn );
         }
+        else if user_command.len() > 3 && &user_command[0..3].to_string() == "sq " {
+            // Select a question
+            let argument = &user_command[3..];
+            select_question( argument, &mut conn, &mut current_nodes);
+        }
+        else if user_command.len() > 3 && &user_command[0..3].to_string() == "sn " {
+            // Select a node
+            let argument = &user_command[3..];
+            select_node( argument, &mut conn, &mut current_nodes);
+        }
+        else if user_command == "out" {
+            // Node out 
+            move_out_current_node(&mut conn, &mut current_nodes);
+        }
+        else if user_command == "doc" {
+            // Add documentation
+            add_documentation( &mut conn, &mut current_nodes);
+        }
+        else if user_command == "term" {
+            // Add new term
+            add_new_term( &mut conn, &mut current_nodes );
+        }
         else if user_command.len() < 3 {
             print_title();
             print_header(&mut current_nodes);
             print_content();
             println!("Not a command. help");
             print_cursor(&mut current_nodes);
-        }
-        else if &user_command[0..3].to_string() == "sq " {
-            // Select a question
-            let argument = &user_command[3..];
-            select_question( argument, &mut conn, &mut current_nodes);
-        }
-        else if &user_command[0..3].to_string() == "sn " {
-            // Select a node
-            let argument = &user_command[3..];
-            select_node( argument, &mut conn, &mut current_nodes);
-        }
-        else if &user_command[0..3].to_string() == "out" {
-            // Node out 
-            move_out_current_node(&mut conn, &mut current_nodes);
-        }
-        else if &user_command[0..3].to_string() == "doc" {
-            // Add documentation
-            add_documentation( &mut conn, &mut current_nodes);
-        }
-        else if &user_command[0..3].to_string() == "am " {
-            // Add documentation
-            add_model( &mut conn, &mut current_nodes);
         }
         else if user_command == "exit" {
             break;
@@ -114,7 +119,8 @@ fn print_help(current_nodes: &Vec<Node>) {
     \nADD FUNCTIONS\n\
     q\t\t add root question with name\n\
     doc\t\t Adds a URL for documentation to current node\n\
-    am\t\t Adds a model to current node";
+    am\t\t Adds a model to current node\n\
+    term\t\t Adds a new term to current node";
 
     println!("{}", help);
     print_cursor(current_nodes);
@@ -140,10 +146,11 @@ fn print_header(current_nodes: &Vec<Node>) {
             x if x == NodeType::Question as i32 => header += "[?]",
             x if x == NodeType::Documentation as i32 => header += "[Doc]",
             x if x == NodeType::Model as i32 => header += "[Model]",
+            x if x == NodeType::Term as i32 => header += "[Term]",
             _ => header += "",
         };
 
-       header += &node.label; 
+       header += &node.label.trim(); 
        header.push(' '); 
     }
 
@@ -188,11 +195,18 @@ fn print_cursor_for_input(input_text: &str) {
 
 
 
-fn ask_question() -> String {
-    println!("[?]");
+fn ask_question(current_nodes: &mut Vec<Node>, conn: &mut my::PooledConn ) {
+    print_title();
+    print_header(current_nodes);
+
+    // Cer input de la user pentru intrebare
+    print_cursor_for_input("Question");
     let mut question = String::new();
     stdin().read_line(&mut question).expect("Din not enter correct string");
-    return question.trim().to_string(); 
+    question = question.trim().to_string(); 
+    db_operations::save_question( &question, conn );
+
+    print_all_with_content("question saved", current_nodes);
 }
 
 
@@ -231,18 +245,50 @@ fn add_documentation( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> )
 fn add_model( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
     let parent_node_id = current_nodes.get( current_nodes.len() - 1 ).unwrap().node_id;
 
-    println!("[Model label ?-]");
+    print_title();
+    print_header(current_nodes);
+    print_cursor_for_input("Model label. Content il iau din /tmp/study.txt ?");
     let mut label = String::new();
-    stdin().read_line(&mut label).expect("Din not enter correct string");
+    stdin().read_line(&mut label).expect("Did not enter correct string");
     label = label.trim().to_string();
 
-    println!("[Model content ?-]");
-    let mut model = String::new();
-    stdin().read_line(&mut model).expect("Din not enter correct string");
-    model = model.trim().to_string(); 
-    model = model.replace("\"", "'");
+    let filename = "/tmp/study.txt";
+    let mut model = fs::read_to_string(filename).expect("Cannot read the file");
+    model = model.replace("\"", "\\\"");
 
     db_operations::save_model(&label, &model, parent_node_id, conn);
+
+    // Updatez current_nodes
+    current_nodes.pop();
+    match db_operations::get_node( parent_node_id, conn ) {
+        None => {},
+        Some(updated_node) => current_nodes.push(updated_node),
+    };
+
+    print_all_with_content("Model saved", current_nodes);
+}
+
+fn add_new_term( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
+    let parent_node_id = current_nodes.get( current_nodes.len() - 1 ).unwrap().node_id;
+
+    // Cer input de la user pentru noul termen. term va fi si labelul nodului
+    print_title();
+    print_header(current_nodes);
+    print_cursor_for_input("Term");
+    let mut term = String::new();
+    stdin().read_line(&mut term).expect("Did not enter correct string");
+    term = term.trim().to_string();
+
+    db_operations::save_term(&term, parent_node_id, conn);
+
+    // Updatez current_nodes
+    current_nodes.pop();
+    match db_operations::get_node( parent_node_id, conn ) {
+        None => {},
+        Some(updated_node) => current_nodes.push(updated_node),
+    };
+
+    print_all_with_content("Term saved", current_nodes);
 }
 
 
@@ -351,10 +397,6 @@ fn select_node( argument: &str, conn: &mut my::PooledConn, current_nodes: &mut V
         Some(node) => {
             current_nodes.push(node);
             show_node_content(conn, current_nodes);
-            //print_title();
-            //print_header(current_nodes);
-            //print_content();
-            //print_cursor(current_nodes);
         },
     }
     
@@ -362,10 +404,6 @@ fn select_node( argument: &str, conn: &mut my::PooledConn, current_nodes: &mut V
 
 fn move_out_current_node(conn: &mut my::PooledConn, current_nodes: &mut Vec<Node>) {
     current_nodes.pop();
-
-    //print_title();
-    //print_header(current_nodes);
-    //print_cursor(current_nodes);
     show_node_content(conn, current_nodes);
 }
 
@@ -391,6 +429,17 @@ fn show_node_content(conn: &mut my::PooledConn, current_nodes: &mut Vec<Node>) {
             match db_operations::get_model(current_node.node_id, conn) {
                 None => print_all_with_content( "Model not found", current_nodes ),
                 Some(model) => print_all_with_content( &model.content, current_nodes ),
+            }
+        },
+        x if x == NodeType::Term as i32 => {
+            match db_operations::get_term(current_node.node_id, conn) {
+                None => print_all_with_content( "Term not found", current_nodes ),
+                Some(term) => {
+                    let mut content = term.term;
+                    content += " = ";
+                    content += &term.explanation;
+                    print_all_with_content( &content, current_nodes );
+                },
             }
         },
         _ => {},
