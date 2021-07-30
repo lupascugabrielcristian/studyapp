@@ -20,6 +20,12 @@ pub struct Term {
     pub explanation: String,
 }
 
+pub struct TryNode {
+    pub node_id: i32,
+    pub result: i32,
+    pub comment: String,
+}
+
 pub struct Node {
     pub node_id: i32,
     pub node_type: i32,
@@ -30,7 +36,7 @@ pub struct Node {
 
 impl Node {
     pub fn to_string(&mut self) -> String {
-        let types: [&str; 5] = ["?", "Doc  ", "Model", "Term",  "."];
+        let types: [&str; 6] = ["?", "Doc  ", "Model", "Term", "Try",  "."];
 
         let mut describe: String = "[:type] ".to_string();
         describe += "[:id] ";
@@ -42,7 +48,7 @@ impl Node {
     }
 
     pub fn to_short_string(&mut self) -> String {
-        let types: [&str; 5] = ["?", "D", "M", "T",  "."];
+        let types: [&str; 6] = ["?", "D", "M", "Tm", "Ty", "."];
 
         let mut describe: String = "[:type ".to_string();
         describe += ":id] ";
@@ -59,6 +65,7 @@ pub enum NodeType {
     Documentation = 1,
     Model = 2,
     Term = 3,
+    TryNode = 4,
 }
 
 
