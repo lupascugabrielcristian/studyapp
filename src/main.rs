@@ -46,6 +46,10 @@ fn main() {
             // Add model
             add_model( &mut conn, &mut current_nodes);
         }
+        else if user_command == "doc" {
+            // Add documentation
+            add_documentation( &mut conn, &mut current_nodes);
+        }
         else if user_command == "ls" {
             // List node
             list_node(&mut current_nodes, &mut conn);
@@ -67,7 +71,7 @@ fn main() {
             let argument = &user_command[3..];
             select_question( argument, &mut conn, &mut current_nodes);
         }
-        else if user_command.len() > 3 && &user_command[0..3].to_string() == "sn " {
+        else if user_command.len() > 3 && &user_command[0..3].to_string() == "cd " {
             // Select a node
             let argument = &user_command[3..];
             select_node( argument, &mut conn, &mut current_nodes);
@@ -79,10 +83,6 @@ fn main() {
         else if user_command == "out" {
             // Node out 
             move_out_current_node(&mut conn, &mut current_nodes);
-        }
-        else if user_command == "doc" {
-            // Add documentation
-            add_documentation( &mut conn, &mut current_nodes);
         }
         else if user_command == "term" {
             // Add new term
@@ -100,6 +100,10 @@ fn main() {
         }
         else if user_command == "label" {
             update_node_label( &mut conn, &mut current_nodes );
+        }
+        else if user_command.len() > 5 && &user_command[0..3].to_string() == "mv " {
+            let arguments = &user_command[3..];
+            move_node(arguments, &mut conn, &mut current_nodes);
         }
         else if user_command == "content" {
             update_model_content(&mut conn, &mut current_nodes );
@@ -137,8 +141,8 @@ fn print_help(current_nodes: &Vec<Node>) {
     help \t\t show this menu \n\
     exit \t\t exit application\n\
     \nMOVE FUNCTIONS\n\
-    sq [index]\t select question [index]\n\
-    sn [index]\t select node [index]\n\
+    sq [id]\t select question [index]\n\
+    cd [id]\t select node [index]\n\
     out\t\t move out of the current node\n\
     \nLIST FUNCTIONS\n\
     lq\t\t list all questions in database\n\
@@ -146,16 +150,18 @@ fn print_help(current_nodes: &Vec<Node>) {
     show\t\t Show the content of the node \n\
     all\t\t Show all the nodes tree\n\
     \nADD FUNCTIONS\n\
-    q\t\t add root question with name\n\
-    doc\t\t Adds a URL for documentation to current node\n\
-    am\t\t Adds a model to current node\n\
+    q\t\t Add root question with name\n\
+    subq\t\t Add a subquestion to current node\n\
+    doc\t\t Add a URL for documentation to current node\n\
+    am\t\t Add a model to current node\n\
     content\t\t Update the current model content\n\
-    term\t\t Adds a new term to current node\n\
-    explain\t\t Adds a new explanation for a TERM node\n\
-    try\t\t Adds a try node to current node\n\
+    term\t\t Add a new term to current node\n\
+    explain\t\t Add a new explanation for a TERM node\n\
+    try\t\t Add a try node to current node\n\
     trycom\t\t Update the comment for a try node\n\
     label\t\t Update the current node label\n\
-    del [index]\t Delete a node";
+    mv [id] [to_id]\t Move node with id as child to node with id to_id\n\
+    del [id]\t Delete a node";
 
     println!("{}", help);
     print_cursor(current_nodes);
@@ -188,10 +194,12 @@ fn print_header(current_nodes: &Vec<Node>) {
             x if x == NodeType::Model as i32 => header += "[M]",
             x if x == NodeType::Term as i32 => header += "[T]",
             x if x == NodeType::TryNode as i32 => header += "[Ty]",
+            x if x == NodeType::Subquestion as i32 => header += "[?]",
             _ => header += "",
         };
 
        header += &node.label.trim(); 
+       header.push(','); 
        header.push(' '); 
     }
 
@@ -291,11 +299,22 @@ fn add_documentation( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> )
     // Cer input de la user pentru content
     print_title();
     print_header(current_nodes);
-    print_cursor_for_input("Doc content");
-    let mut documentation = String::new();
-    stdin().read_line(&mut documentation).expect("Din not enter correct string");
+    print_cursor_for_input("Doc content. Content il iau din /tmp/study.txt. Ready?");
 
+    let mut answer = String::new();
+    stdin().read_line(&mut answer).expect("Did not enter correct string");
+    answer = answer.trim().to_owned();
+
+    if answer != "y" {
+        print_all_with_content("Canceled", current_nodes);
+        return;
+    }
+
+    let filename = "/tmp/study.txt";
+    let mut documentation = fs::read_to_string(filename).expect("Cannot read the file");
+    documentation = documentation.replace("\"", "\\\"");
     documentation = documentation.trim().to_string(); 
+
     db_operations::save_documentation(&label, &documentation, parent_node_id, conn);
 
     // Updatez nodul curent
@@ -477,6 +496,34 @@ fn update_node_label( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> )
     print_all_with_content("Node updated", current_nodes);
 }
 
+
+fn move_node(arguments: &str,  conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
+    let args: Vec<i32> = arguments.split(" ")
+            .map(|id| id.parse::<i32>() )                   // parsez valoare string a id-ului
+            .map(|id_parsed| id_parsed.unwrap_or(-1) )      // dupa parsare rezulta Result. daca este Err, atunci o scot -1
+            .collect();
+
+    // Verific formatul comenzii
+    if args.len() < 2 {
+        print_all_with_content("Not enough ids. Format of copy command is copy [id_to_copy] [into_parent_id]", current_nodes);
+        return;
+    }
+
+    let node_to_copy = args[0];
+    let parent_node = args[1];
+
+    // Verific sa nu fiu in nodul copiat
+    if current_nodes.len() > 1 && current_nodes.get( current_nodes.len() - 1 ).unwrap().node_id == node_to_copy {
+        print_all_with_content("Cannot copy current node", current_nodes);
+        return;
+    }
+
+    db_operations::move_node_to_parent(node_to_copy, parent_node, conn);
+
+    print_all_with_content("Node copied", current_nodes);
+}
+
+
 fn update_model_content( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
     // Verific sa am selectat cel putin un nod
     if current_nodes.len() == 0 {
@@ -523,10 +570,17 @@ fn update_model_content( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node
 
 fn delete_node( argument: &str, conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
     let node_to_delete: i32 = argument.parse().expect("That was not a number");
-    let current_node_id = current_nodes.get( current_nodes.len() - 1 ).unwrap().node_id;
 
+    // Verific sa nu fie nodul curent
+    let current_node_id = current_nodes.get( current_nodes.len() - 1 ).unwrap().node_id;
     if current_node_id == node_to_delete {
         print_all_with_content("Cannot delete current node", current_nodes);
+        return;
+    }
+
+    // Verific sa nu aiba copii
+    if current_nodes.get( current_nodes.len() - 1 ).unwrap().child_nodes.len() > 0 {
+        print_all_with_content("Cannot delete a node with children", current_nodes);
         return;
     }
     
@@ -679,11 +733,7 @@ fn print_line_with_colors(space: &str, desc: &str, node_type: i32, is_current: b
                     reset = color::Fg(color::Reset));
         },
         x if x == NodeType::TryNode as i32 => {
-            println!(" {sp}  |__ {color}{desc}{reset}", 
-                    sp = space,
-                    color = color::Fg(color::Yellow),
-                    desc = desc,
-                    reset = color::Fg(color::Reset));
+            println!(" {}  |__ {}", space, desc);
         },
         x if x == NodeType::Subquestion as i32 => {
             println!(" {sp}  |__ {color}{desc}{reset}", 

@@ -5,8 +5,11 @@ cargo run
 
 
 TODO
+- copy node into another node
 - sa ma mut lateral, la un nod vecin
-- sa pot adauga o sub-intrebare
+	- down
+	- up
 - sa pot sterge o intrebare
 - header cu culori
 - list all tries
+- move child node to another node

@@ -364,6 +364,26 @@ pub fn get_try(node_id: i32, conn: &mut my::PooledConn) -> Option<TryNode> {
     return found.drain(0..1).next();
 }
 
+pub fn move_node_to_parent(node_to_copy: i32, parent_node: i32,  conn: &mut my::PooledConn ) {
+    // Modific in tabela nodes 
+    // Prima data iau parent_node curent si il salvez intr-o variabile @id
+    // pentru nodul ce trebuie copiat, cu id-ul node_to_copy, updatez parent_node, cu noua valoare parent_node
+    // pentru nodul cu id-ul parent_node, sa adaug noul id node_to_copy la coloana child_nodes
+    // sterg din parintele initial id-ul nodului mutat
+    let copy_query = "SELECT parent_node INTO @id FROM mysql.nodes WHERE node_id=':node_to_copy' LIMIT 1;
+                    UPDATE mysql.nodes SET parent_node=':parent_node' WHERE node_id=':node_to_copy';
+                    UPDATE mysql.nodes SET child_nodes=CONCAT(child_nodes,' ',':node_to_copy') WHERE node_id=':parent_node';
+                    UPDATE mysql.nodes SET child_nodes=REPLACE(child_nodes, ':node_to_copy', '') WHERE node_id=@id";
+    let copy_query = copy_query.replace(":parent_node", &parent_node.to_string());
+    let copy_query = copy_query.replace(":node_to_copy", &node_to_copy.to_string());
+
+    conn.start_transaction(false, None, None)
+        .and_then(|mut t| {
+            t.query(copy_query).unwrap();
+            t.commit()
+        }).unwrap();
+}
+
 
 pub fn delete_node(node_id: i32, conn: &mut my::PooledConn ) {
     // Mai intai iau parent_id din tabela nodes, cu randul corespunzator node_id
