@@ -36,7 +36,7 @@ pub struct Node {
 
 impl Node {
     pub fn to_string(&mut self) -> String {
-        let types: [&str; 6] = ["?", "Doc  ", "Model", "Term", "Try",  "."];
+        let types: [&str; 7] = ["?", "Doc  ", "Model", "Term", "Try", "?",  "."];
 
         let mut describe: String = "[:type] ".to_string();
         describe += "[:id] ";
@@ -48,7 +48,7 @@ impl Node {
     }
 
     pub fn to_short_string(&mut self) -> String {
-        let types: [&str; 6] = ["?", "D", "M", "Tm", "Ty", "."];
+        let types: [&str; 7] = ["?", "D", "M", "Tm", "Ty", "?", "."];
 
         let mut describe: String = "[:type ".to_string();
         describe += ":id] ";
@@ -66,6 +66,7 @@ pub enum NodeType {
     Model = 2,
     Term = 3,
     TryNode = 4,
+    Subquestion = 5,
 }
 
 
@@ -75,3 +76,4 @@ pub enum NodeType {
 // model: 2, 
 // new term: 3
 // try: 4
+// subquestion: 5

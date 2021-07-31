@@ -5,10 +5,8 @@ cargo run
 
 
 TODO
-- try sa ia tot din /tmp/study.txt
+- sa ma mut lateral, la un nod vecin
 - sa pot adauga o sub-intrebare
-- Intrebarea sa aiba si content
 - sa pot sterge o intrebare
 - header cu culori
 - list all tries
-- sa ma mut lateral, la un nod vecin

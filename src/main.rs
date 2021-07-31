@@ -10,7 +10,7 @@ use mysql as my;
 
 mod sql_database;
 use crate::sql_database::db_operations;
-use crate::sql_database::models::{ Question, Node, NodeType};
+use crate::sql_database::models::{ Question, Node, NodeType };
 
 fn main() {
     let mut user_command = String::new();
@@ -37,6 +37,10 @@ fn main() {
         else if user_command == "q" {
             // Add new question
             ask_question(&mut current_nodes, &mut conn);
+        }
+        else if user_command == "subq" {
+            // Add a subquestion
+            add_subquestion(&mut current_nodes, &mut conn);
         }
         else if user_command == "am" {
             // Add model
@@ -233,6 +237,30 @@ fn print_cursor_for_input(input_text: &str) {
 }
 
 
+fn add_subquestion(current_nodes: &mut Vec<Node>, conn: &mut my::PooledConn ) {
+    print_title();
+    print_header(current_nodes);
+
+    // Cer input de la user pentru intrebare
+    print_cursor_for_input("Question");
+    let mut question = String::new();
+    stdin().read_line(&mut question).expect("Din not enter correct string");
+    let question = question.trim(); 
+
+    let parent_node_id = current_nodes.get( current_nodes.len() - 1 ).unwrap().node_id;
+
+    db_operations::add_subquestion(&question, parent_node_id, conn);
+
+    // Updatez current_nodes
+    current_nodes.pop();
+    match db_operations::get_node( parent_node_id, conn ) {
+        None => {},
+        Some(updated_node) => current_nodes.push(updated_node),
+    };
+
+    print_all_with_content("Question saved", current_nodes);
+}
+
 
 fn ask_question(current_nodes: &mut Vec<Node>, conn: &mut my::PooledConn ) {
     print_title();
@@ -419,8 +447,6 @@ fn add_try_comment( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
     else {
         print_all_with_content("Canceled", current_nodes);
     }
-
-
 }
 
 fn update_node_label( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
@@ -659,6 +685,13 @@ fn print_line_with_colors(space: &str, desc: &str, node_type: i32, is_current: b
                     desc = desc,
                     reset = color::Fg(color::Reset));
         },
+        x if x == NodeType::Subquestion as i32 => {
+            println!(" {sp}  |__ {color}{desc}{reset}", 
+                    sp = space,
+                    color = color::Fg(color::LightCyan),
+                    desc = desc,
+                    reset = color::Fg(color::Reset));
+        },
         _ => {
             println!(" {}  |__ {}", space, desc);
         },
@@ -795,6 +828,12 @@ fn show_node_content(conn: &mut my::PooledConn, current_nodes: &mut Vec<Node>) {
                     content += &try_node.comment;
                     print_all_with_content( &content, current_nodes );
                 },
+            }
+        },
+        x if x == NodeType::Subquestion as i32 => { 
+            match db_operations::get_question(current_node.node_id, conn) {
+                None => print_all_with_content("Question not found", current_nodes ),
+                Some(question) => print_all_with_content( &question.question_text, current_nodes ),
             }
         },
         _ => {},

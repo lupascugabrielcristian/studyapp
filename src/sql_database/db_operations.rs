@@ -91,7 +91,9 @@ pub fn save_question( question_text: &String, conn: &mut my::PooledConn ) {
     // Salvez in nodes table, 
     // iau node_id, cu care s-a salvat, 
     // si salvez in questions table cu aces node_id
-    let add_node_query = "INSERT INTO mysql.nodes ( node_type, child_nodes, parent_node, label ) VALUES(\"0\", \"\", -1, \":label\"); SELECT LAST_INSERT_ID() INTO @id; INSERT INTO mysql.questions( node_id, question_text ) VALUES( @id, \":question_text\")";
+    let add_node_query = "INSERT INTO mysql.nodes ( node_type, child_nodes, parent_node, label ) VALUES(\"0\", \"\", -1, \":label\");
+                          SELECT LAST_INSERT_ID() INTO @id;
+                          INSERT INTO mysql.questions( node_id, question_text ) VALUES( @id, \":question_text\")";
     let add_node_query = add_node_query.replace(":question_text", &question_text);
     let add_node_query = add_node_query.replace(":label", &question_text);
     conn.start_transaction(false, None, None)
@@ -99,8 +101,26 @@ pub fn save_question( question_text: &String, conn: &mut my::PooledConn ) {
             t.query(add_node_query).unwrap();
             t.commit()
         }).unwrap();
-
 }
+
+
+pub fn add_subquestion( question_text: &str, parent_id: i32, conn: &mut my::PooledConn ) {
+    let add_query = "INSERT INTO  mysql.nodes ( node_type, child_nodes, parent_node, label ) VALUES(\"5\", \"\", \":parent_id\", \":label\");
+                     SELECT LAST_INSERT_ID() INTO @id;
+                     INSERT INTO mysql.questions( node_id, question_text ) VALUES( @id, \":question_text\");
+                     UPDATE mysql.nodes SET child_nodes=CONCAT(child_nodes,' ',@id) WHERE node_id=\":parent_id\"";
+
+    let add_query = add_query.replace(":parent_id", &parent_id.to_string());
+    let add_query = add_query.replace(":label", question_text);
+    let add_query = add_query.replace(":question_text", question_text);
+
+    conn.start_transaction(false, None, None)
+        .and_then(|mut t| {
+            t.query(add_query).unwrap();
+            t.commit()
+        }).unwrap();
+}
+
 
 pub fn save_documentation( label: &String, documentation: &String, parent_id: i32, conn: &mut my::PooledConn ) {
     // Salvez in nodes tables si folosesc id-ul generat acolo ca sa salvez in documentation table
