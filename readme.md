@@ -10,3 +10,5 @@ TODO
 - Intrebarea sa aiba si content
 - sa pot sterge o intrebare
 - header cu culori
+- list all tries
+- sa ma mut lateral, la un nod vecin

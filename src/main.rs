@@ -91,7 +91,7 @@ fn main() {
         else if user_command == "explain" {
             add_explanation( &mut conn, &mut current_nodes );
         }
-        else if user_command == "com" {
+        else if user_command == "trycom" {
             add_try_comment( &mut conn, &mut current_nodes );
         }
         else if user_command == "label" {
@@ -145,12 +145,12 @@ fn print_help(current_nodes: &Vec<Node>) {
     q\t\t add root question with name\n\
     doc\t\t Adds a URL for documentation to current node\n\
     am\t\t Adds a model to current node\n\
-    term\t\t Adds a new term to current node\n\
-    try\t\t Adds a try node to current node\n\
-    explain\t\t Adds a new explanation for a TERM node\n\
-    com\t\t Updated the comment for a try node\n\
-    label\t\t Update the current node label\n\
     content\t\t Update the current model content\n\
+    term\t\t Adds a new term to current node\n\
+    explain\t\t Adds a new explanation for a TERM node\n\
+    try\t\t Adds a try node to current node\n\
+    trycom\t\t Update the comment for a try node\n\
+    label\t\t Update the current node label\n\
     del [index]\t Delete a node";
 
     println!("{}", help);
@@ -331,30 +331,6 @@ fn add_new_term( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
 }
 
 
-fn add_new_try( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
-    let parent_node_id = current_nodes.get( current_nodes.len() - 1 ).unwrap().node_id;
-
-    // Cer input de la user pentru noul try node pentru label-ul nodului
-    print_title();
-    print_header(current_nodes);
-    print_cursor_for_input("Try");
-    let mut try_node = String::new();
-    stdin().read_line(&mut try_node).expect("Did not enter correct string");
-    try_node = try_node.trim().to_string();
-
-    db_operations::save_try(&try_node, parent_node_id, conn);
-
-    // Updatez current_nodes
-    current_nodes.pop();
-    match db_operations::get_node( parent_node_id, conn ) {
-        None => {},
-        Some(updated_node) => current_nodes.push(updated_node),
-    };
-
-    print_all_with_content("Try saved", current_nodes);
-}
-
-
 fn add_explanation( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
     if current_nodes.get( current_nodes.len() - 1 ).unwrap().node_type != NodeType::Term as i32  {
         print_all_with_content("Not in a TERM node!", current_nodes);
@@ -383,6 +359,30 @@ fn add_explanation( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
 }
 
 
+fn add_new_try( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
+    let parent_node_id = current_nodes.get( current_nodes.len() - 1 ).unwrap().node_id;
+
+    // Cer input de la user pentru noul try node pentru label-ul nodului
+    print_title();
+    print_header(current_nodes);
+    print_cursor_for_input("Try label");
+    let mut try_node = String::new();
+    stdin().read_line(&mut try_node).expect("Did not enter correct string");
+    try_node = try_node.trim().to_string();
+
+    db_operations::save_try(&try_node, parent_node_id, conn);
+
+    // Updatez current_nodes
+    current_nodes.pop();
+    match db_operations::get_node( parent_node_id, conn ) {
+        None => {},
+        Some(updated_node) => current_nodes.push(updated_node),
+    };
+
+    print_all_with_content("Try saved", current_nodes);
+}
+
+
 fn add_try_comment( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
 
     if current_nodes.get( current_nodes.len() - 1 ).unwrap().node_type != NodeType::TryNode as i32  {
@@ -390,25 +390,36 @@ fn add_try_comment( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
         return;
     }
 
-    let try_id = current_nodes.get( current_nodes.len() - 1 ).unwrap().node_id;
-
     print_title();
     print_header(current_nodes);
-    print_cursor_for_input("New try comment:");
-    let mut comment = String::new();
-    stdin().read_line(&mut comment).expect("Did not enter correct string");
-    comment = comment.trim().to_string();
+    print_cursor_for_input("Try comment. Continutul il iau din /tmp/study.txt ?[y]:");
+    let mut answer = String::new();
+    stdin().read_line(&mut answer).expect("Did not enter correct string");
+    answer = answer.trim().to_owned();
 
-    db_operations::add_try_comment(&comment, try_id, conn); 
+    if answer == "y" {
+        let filename = "/tmp/study.txt";
+        let mut comment = fs::read_to_string(filename).expect("Cannot read the file");
+        comment = comment.replace("\"", "\\\"");
 
-    // Updatez current_nodes
-    current_nodes.pop();
-    match db_operations::get_node( try_id, conn ) {
-        None => {},
-        Some(updated_node) => current_nodes.push(updated_node),
-    };
+        let try_id = current_nodes.get( current_nodes.len() - 1 ).unwrap().node_id;
+
+        db_operations::add_try_comment(&comment, try_id, conn); 
+
+        // Updatez current_nodes
+        current_nodes.pop();
+        match db_operations::get_node( try_id, conn ) {
+            None => {},
+            Some(updated_node) => current_nodes.push(updated_node),
+        };
 
     print_all_with_content("Try updated", current_nodes);
+
+    }
+    else {
+        print_all_with_content("Canceled", current_nodes);
+    }
+
 
 }
 
