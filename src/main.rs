@@ -84,6 +84,11 @@ fn main() {
             // Node out 
             move_out_current_node(&mut conn, &mut current_nodes);
         }
+        else if user_command.len() > 3 && &user_command[0..4] == "lat " {
+            // Go to a lateral node. This means in the same parent
+            let node_to_move = &user_command[4..];
+            move_to_lateral_node(node_to_move, &mut conn, &mut current_nodes);
+        }
         else if user_command == "term" {
             // Add new term
             add_new_term( &mut conn, &mut current_nodes );
@@ -144,6 +149,7 @@ fn print_help(current_nodes: &Vec<Node>) {
     sq [id]\t select question [index]\n\
     cd [id]\t select node [index]\n\
     out\t\t move out of the current node\n\
+    down\t\t go to node below the current one\n\
     \nLIST FUNCTIONS\n\
     lq\t\t list all questions in database\n\
     ls\t\t Lists the current node and the children\n\
@@ -827,6 +833,34 @@ fn move_out_current_node(conn: &mut my::PooledConn, current_nodes: &mut Vec<Node
     }
     current_nodes.pop();
     show_node_content(conn, current_nodes);
+}
+
+fn move_to_lateral_node(argument: &str, conn: &mut my::PooledConn, current_nodes: &mut Vec<Node>) {
+    let node_to_move: i32 = argument.parse().expect("That was not a number");
+
+    if current_nodes.len() < 2 {
+        print_all_with_content( "Cannot move down. Not enough nodes depth", current_nodes );
+        return;
+    }
+
+    // Verific daca nodul selectat este unul din copiii nodului curent
+    //let current_node_id = current_nodes.get( current_nodes.len() - 1 ).unwrap().node_id;
+
+    let parent_children: Vec<i32> = current_nodes.get( current_nodes.len() - 2 ).unwrap().child_nodes.split(" ")
+            .map(|id| id.parse::<i32>() )                   // parsez valoare string a id-ului
+            .map(|id_parsed| id_parsed.unwrap_or(-1) )      // dupa parsare rezulta Result. daca este Err, atunci o scot -1
+            .filter(|id| *id != -1)
+            .collect();
+
+    match parent_children.iter().position( |id| id == &node_to_move ) {
+        None => {
+            print_all_with_content( &("That node is not at the same level as the current one ".to_owned() + argument),  current_nodes );
+        },
+        Some(index) => {
+            current_nodes.pop();
+            select_node(argument, conn, current_nodes);
+        },
+    }
 }
 
 fn show_node_content(conn: &mut my::PooledConn, current_nodes: &mut Vec<Node>) {
