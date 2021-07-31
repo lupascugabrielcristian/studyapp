@@ -149,7 +149,7 @@ fn print_help(current_nodes: &Vec<Node>) {
     sq [id]\t select question [index]\n\
     cd [id]\t select node [index]\n\
     out\t\t move out of the current node\n\
-    down\t\t go to node below the current one\n\
+    lat [id]\t\t go to a node of the same parent\n\
     \nLIST FUNCTIONS\n\
     lq\t\t list all questions in database\n\
     ls\t\t Lists the current node and the children\n\
@@ -526,7 +526,7 @@ fn move_node(arguments: &str,  conn: &mut my::PooledConn, current_nodes: &mut Ve
 
     db_operations::move_node_to_parent(node_to_copy, parent_node, conn);
 
-    print_all_with_content("Node copied", current_nodes);
+    list_all_nodes_tree(current_nodes, conn);
 }
 
 
@@ -820,7 +820,8 @@ fn select_node( argument: &str, conn: &mut my::PooledConn, current_nodes: &mut V
         },
         Some(node) => {
             current_nodes.push(node);
-            show_node_content(conn, current_nodes);
+            //show_node_content(conn, current_nodes);
+            list_all_nodes_tree(current_nodes, conn);
         },
     }
     
@@ -832,7 +833,7 @@ fn move_out_current_node(conn: &mut my::PooledConn, current_nodes: &mut Vec<Node
         return;
     }
     current_nodes.pop();
-    show_node_content(conn, current_nodes);
+    list_all_nodes_tree(current_nodes, conn);
 }
 
 fn move_to_lateral_node(argument: &str, conn: &mut my::PooledConn, current_nodes: &mut Vec<Node>) {
@@ -856,7 +857,7 @@ fn move_to_lateral_node(argument: &str, conn: &mut my::PooledConn, current_nodes
         None => {
             print_all_with_content( &("That node is not at the same level as the current one ".to_owned() + argument),  current_nodes );
         },
-        Some(index) => {
+        Some(_index) => {
             current_nodes.pop();
             select_node(argument, conn, current_nodes);
         },

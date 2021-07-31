@@ -5,9 +5,6 @@ cargo run
 
 
 TODO
-- sa ma mut lateral, la un nod vecin
-	- down
-	- up
 - sa pot sterge o intrebare
 - header cu culori
 - list all tries
