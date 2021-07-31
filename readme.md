@@ -1,3 +1,4 @@
 TODO
 - Intrebarea sa aiba si content
-- sa pot sterge un nod
+- sa pot sterge o intrebare
+- header cu culori

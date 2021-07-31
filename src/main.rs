@@ -175,6 +175,7 @@ fn print_header(current_nodes: &Vec<Node>) {
             x if x == NodeType::Documentation as i32 => header += "[D]",
             x if x == NodeType::Model as i32 => header += "[M]",
             x if x == NodeType::Term as i32 => header += "[T]",
+            x if x == NodeType::TryNode as i32 => header += "[Ty]",
             _ => header += "",
         };
 
@@ -608,6 +609,27 @@ fn select_question( argument: &str, conn: &mut my::PooledConn, current_nodes: &m
 fn select_node( argument: &str, conn: &mut my::PooledConn, current_nodes: &mut Vec<Node>) {
     let node_id: i32 = argument.parse().expect("That was not a number");
 
+    // Daca nu am selectat o intrebare sa nu pot intra in nici un nod
+    if current_nodes.len() == 0 {
+        print_all_with_content( "Question is not selected", current_nodes );
+        return;
+    }
+
+    // Verific daca nodul selectat este unul din copiii nodului curent
+    if current_nodes.len() > 0 {
+        let child_count = current_nodes.get( current_nodes.len() - 1).unwrap().child_nodes.split(" ")
+            .map(|child_node_id| child_node_id.parse::<i32>() ) // parsez valoare string a id-ului
+            .map( |id_parsed| id_parsed.unwrap_or(-1) )         // dupa parsare rezulta Result. daca este Err, atunci o scot -1
+            .filter(|val| val == &node_id )                     // Compar cu valoarea selectata de user
+            .count();
+            
+        if child_count == 0 {
+            print_all_with_content( &("Current node has no child with this id ".to_owned() + argument), current_nodes );
+            return;
+        }
+    }
+
+
     match db_operations::get_node( node_id, conn ) {
         None => { 
             print_title();
@@ -625,6 +647,10 @@ fn select_node( argument: &str, conn: &mut my::PooledConn, current_nodes: &mut V
 }
 
 fn move_out_current_node(conn: &mut my::PooledConn, current_nodes: &mut Vec<Node>) {
+    if current_node.len() < 2 {
+        print_all_with_content( "Cannot move out. Not enough nodes depth", current_nodes );
+        return;
+    }
     current_nodes.pop();
     show_node_content(conn, current_nodes);
 }
