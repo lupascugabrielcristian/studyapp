@@ -94,6 +94,12 @@ fn main() {
         else if user_command == "com" {
             add_try_comment( &mut conn, &mut current_nodes );
         }
+        else if user_command == "label" {
+            update_node_label( &mut conn, &mut current_nodes );
+        }
+        else if user_command == "content" {
+            update_model_content(&mut conn, &mut current_nodes );
+        }
         else if user_command.len() < 3 {
             print_title();
             print_header(&mut current_nodes);
@@ -143,7 +149,9 @@ fn print_help(current_nodes: &Vec<Node>) {
     try\t\t Adds a try node to current node\n\
     explain\t\t Adds a new explanation for a TERM node\n\
     com\t\t Updated the comment for a try node\n\
-    del [index]\t\t Delete a node";
+    label\t\t Update the current node label\n\
+    content\t\t Update the current model content\n\
+    del [index]\t Delete a node";
 
     println!("{}", help);
     print_cursor(current_nodes);
@@ -404,6 +412,78 @@ fn add_try_comment( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
 
 }
 
+fn update_node_label( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
+    // Sa am selectat un nod care nu este intrebarea principala
+    if current_nodes.len() < 2 {
+        print_all_with_content("A node that is not a main question must be selected", current_nodes);
+        return;
+    }
+
+    // Iau noul label de la command line
+    print_title();
+    print_header(current_nodes);
+    print_cursor_for_input("New node label:");
+    let mut label = String::new();
+    stdin().read_line(&mut label).expect("Did not enter correct string");
+    let label = label.trim();
+
+    let node_id = current_nodes.get( current_nodes.len() - 1 ).unwrap().node_id;
+    db_operations::update_node_label(label, node_id, conn);
+
+    // Updatez current_nodes
+    current_nodes.pop();
+    match db_operations::get_node( node_id, conn ) {
+        None => {},
+        Some(updated_node) => current_nodes.push(updated_node),
+    };
+
+    print_all_with_content("Node updated", current_nodes);
+}
+
+fn update_model_content( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
+    // Verific sa am selectat cel putin un nod
+    if current_nodes.len() == 0 {
+        print_all_with_content("Current node must be of type MODEL", current_nodes);
+        return;
+    }
+
+    // Verific sa fiu intr-un nod de tip model
+    if current_nodes.get( current_nodes.len() - 1 ).unwrap().node_type != NodeType::Model as i32  {
+        print_all_with_content("Current node must be of type MODEL", current_nodes);
+        return;
+    }
+
+    print_title();
+    print_header(current_nodes);
+    print_cursor_for_input("New model content il iau din /tmp/study.txt ?[y]");
+    let mut answer = String::new();
+    stdin().read_line(&mut answer).expect("Did not enter correct string");
+    answer = answer.trim().to_owned();
+
+    if answer == "y" {
+        let filename = "/tmp/study.txt";
+        let mut model = fs::read_to_string(filename).expect("Cannot read the file");
+        model = model.replace("\"", "\\\"");
+
+        let node_id = current_nodes.get( current_nodes.len() - 1 ).unwrap().node_id;
+
+        db_operations::update_model_content(&model, node_id, conn);
+
+        // Updatez nodul curent
+        current_nodes.pop();
+        match db_operations::get_node( node_id, conn ) {
+            None => {},
+            Some(updated_node) => current_nodes.push(updated_node),
+        };
+
+        print_all_with_content("Model saved", current_nodes);
+    }
+    else {
+        print_all_with_content("Canceled", current_nodes);
+    }
+
+}
+
 fn delete_node( argument: &str, conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
     let node_to_delete: i32 = argument.parse().expect("That was not a number");
     let current_node_id = current_nodes.get( current_nodes.len() - 1 ).unwrap().node_id;
@@ -647,7 +727,7 @@ fn select_node( argument: &str, conn: &mut my::PooledConn, current_nodes: &mut V
 }
 
 fn move_out_current_node(conn: &mut my::PooledConn, current_nodes: &mut Vec<Node>) {
-    if current_node.len() < 2 {
+    if current_nodes.len() < 2 {
         print_all_with_content( "Cannot move out. Not enough nodes depth", current_nodes );
         return;
     }

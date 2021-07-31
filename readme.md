@@ -5,6 +5,8 @@ cargo run
 
 
 TODO
+- try sa ia tot din /tmp/study.txt
+- sa pot adauga o sub-intrebare
 - Intrebarea sa aiba si content
 - sa pot sterge o intrebare
 - header cu culori

@@ -205,6 +205,29 @@ pub fn add_try_comment( comment: &str, try_id: i32, conn: &mut my::PooledConn ) 
         }).unwrap();
 }
 
+pub fn update_node_label( new_label: &str, node_id: i32, conn: &mut my::PooledConn ) {
+    let update_query = "UPDATE mysql.nodes SET label=\":new_label\" WHERE node_id=\":node_id\"";
+    let update_query = update_query.replace(":new_label", new_label);
+    let update_query = update_query.replace(":node_id", &node_id.to_string());
+
+    conn.start_transaction(false, None, None)
+        .and_then(|mut t| {
+            t.query(update_query).unwrap();
+            t.commit()
+        }).unwrap();
+}
+
+pub fn update_model_content( new_content: &str, model_id: i32, conn: &mut my::PooledConn ) {
+    let update_query = "UPDATE mysql.models SET content=\":new_content\" WHERE node_id=\":model_id\" ";
+    let update_query = update_query.replace(":new_content", new_content);
+    let update_query = update_query.replace(":model_id", &model_id.to_string());
+
+    conn.start_transaction(false, None, None)
+        .and_then(|mut t| {
+            t.query(update_query).unwrap();
+            t.commit()
+        }).unwrap();
+}
 
 pub fn get_question(node_id:i32, conn: &mut my::PooledConn) -> Option<Question> {
     let query = "SELECT * FROM questions WHERE node_id=':node_id'";
