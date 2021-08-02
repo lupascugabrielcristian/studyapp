@@ -286,7 +286,8 @@ fn add_subquestion(current_nodes: &mut Vec<Node>, conn: &mut my::PooledConn ) {
         Some(updated_node) => current_nodes.push(updated_node),
     };
 
-    print_all_with_content("Question saved", current_nodes);
+    list_all_nodes_tree(current_nodes, conn);
+    print_cursor_with_text("Question saved");
 }
 
 
@@ -301,7 +302,8 @@ fn ask_question(current_nodes: &mut Vec<Node>, conn: &mut my::PooledConn ) {
     question = question.trim().to_string(); 
     db_operations::save_question( &question, conn );
 
-    print_all_with_content("question saved", current_nodes);
+    list_all_nodes_tree(current_nodes, conn);
+    print_cursor_with_text("question saved");
 }
 
 
@@ -344,7 +346,8 @@ fn add_documentation( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> )
         Some(updated_node) => current_nodes.push(updated_node),
     };
 
-    print_all_with_content("Doc saved", current_nodes);
+    list_all_nodes_tree(current_nodes, conn);
+    print_cursor_with_text("Doc saved");
 }
 
 /// Adaug model la ultimul nod in care am intrat. Nu intru in noul nod, dupa ce il adaug
@@ -371,7 +374,8 @@ fn add_model( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
         Some(updated_node) => current_nodes.push(updated_node),
     };
 
-    print_all_with_content("Model saved", current_nodes);
+    list_all_nodes_tree(current_nodes, conn);
+    print_cursor_with_text("Model saved");
 }
 
 fn add_new_term( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
@@ -394,7 +398,8 @@ fn add_new_term( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
         Some(updated_node) => current_nodes.push(updated_node),
     };
 
-    print_all_with_content("Term saved", current_nodes);
+    list_all_nodes_tree(current_nodes, conn);
+    print_cursor_with_text("Term saved");
 }
 
 
@@ -422,7 +427,8 @@ fn add_explanation( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
         Some(updated_node) => current_nodes.push(updated_node),
     };
 
-    print_all_with_content("Term updated", current_nodes);
+    list_all_nodes_tree(current_nodes, conn);
+    print_cursor_with_text("Term updated");
 }
 
 
@@ -446,7 +452,8 @@ fn add_new_try( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
         Some(updated_node) => current_nodes.push(updated_node),
     };
 
-    print_all_with_content("Try saved", current_nodes);
+    list_all_nodes_tree(current_nodes, conn);
+    print_cursor_with_text("Try saved");
 }
 
 
@@ -480,7 +487,8 @@ fn update_try_comment( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> 
             Some(updated_node) => current_nodes.push(updated_node),
         };
 
-    print_all_with_content("Try updated", current_nodes);
+    list_all_nodes_tree(current_nodes, conn);
+    print_cursor_with_text("Try updated");
 
     }
     else {
@@ -508,7 +516,6 @@ fn update_try_result( argument: &str, conn: &mut my::PooledConn, current_nodes: 
 
     list_all_nodes_tree(current_nodes, conn);
     print_cursor_with_text("Try updated");
-
 }
 
 
@@ -604,10 +611,12 @@ fn update_model_content( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node
             Some(updated_node) => current_nodes.push(updated_node),
         };
 
-        print_all_with_content("Model saved", current_nodes);
+        list_all_nodes_tree(current_nodes, conn);
+        print_cursor_with_text("Model saved");
     }
     else {
-        print_all_with_content("Canceled", current_nodes);
+        list_all_nodes_tree(current_nodes, conn);
+        print_cursor_with_text("Canceled");
     }
 
 }
@@ -649,10 +658,12 @@ fn update_documentation_content( conn: &mut my::PooledConn, current_nodes: &mut 
             Some(updated_node) => current_nodes.push(updated_node),
         };
 
-        print_all_with_content("Documentation saved", current_nodes);
+        list_all_nodes_tree(current_nodes, conn);
+        print_cursor_with_text("Documentation saved");
     }
     else {
-        print_all_with_content("Canceled", current_nodes);
+        list_all_nodes_tree(current_nodes, conn);
+        print_cursor_with_text("Canceled");
     }
 
 }
