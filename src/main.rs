@@ -219,6 +219,11 @@ fn print_header(current_nodes: &Vec<Node>) {
        header.push(' '); 
     }
 
+    // Daca depeseste o linie, arat doar sfarsitul, cat incape pe o linie
+    if header.len() as u16 > x {
+        header = header[header.len() - x as usize ..].to_string();
+    }
+
     println!("{}", header);
     // Print second line
     println!("{}", line);
@@ -544,7 +549,8 @@ fn update_node_label( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> )
         Some(updated_node) => current_nodes.push(updated_node),
     };
 
-    print_all_with_content("Node updated", current_nodes);
+    list_all_nodes_tree(current_nodes, conn);
+    print_cursor_with_text("Node updated");
 }
 
 
@@ -809,11 +815,12 @@ fn print_children_at_level(child_ids: &str, level: i32, conn: &mut my::PooledCon
 
 fn print_line_with_colors(space: &str, desc: &str, node_type: i32, is_current: bool) {
     if is_current {
-        println!(" {sp}  |__ {color}{desc}{reset}", 
+        println!(" {sp}  |__ {special_back}{desc}{reset}{reset_bg}", 
                 sp = space,
-                color = color::Fg(color::Red),
+                special_back = color::Bg(color::Rgb(71,42,66)),
                 desc = desc,
-                reset = color::Fg(color::Reset));
+                reset = color::Fg(color::Reset),
+                reset_bg = color::Bg(color::Reset));
         return
     }
 

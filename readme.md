@@ -15,7 +15,11 @@ cargo run
 
 TODO
 
+- lq sa afiseze doar intrebarile primare
 - sa verific daca la mv, parintele destinatie este acelasi ca si acum
 - sa pot sterge o intrebare
 - header cu culori
-- list all tries
+- list all: 
+	- terms
+	- models
+	- documentations
