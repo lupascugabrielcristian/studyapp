@@ -249,6 +249,18 @@ pub fn update_model_content( new_content: &str, model_id: i32, conn: &mut my::Po
         }).unwrap();
 }
 
+pub fn update_documentation_content( new_content: &str, node_id: i32, conn: &mut my::PooledConn ) {
+    let update_query = "UPDATE mysql.documentation SET content=\":new_content\" WHERE node_id=\":node_id\" ";
+    let update_query = update_query.replace(":new_content", new_content);
+    let update_query = update_query.replace(":node_id", &node_id.to_string());
+
+    conn.start_transaction(false, None, None)
+        .and_then(|mut t| {
+            t.query(update_query).unwrap();
+            t.commit()
+        }).unwrap();
+}
+
 pub fn get_question(node_id:i32, conn: &mut my::PooledConn) -> Option<Question> {
     let query = "SELECT * FROM questions WHERE node_id=':node_id'";
     let query = query.replace(":node_id", &node_id.to_string() );

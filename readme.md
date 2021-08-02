@@ -5,6 +5,8 @@ cargo run
 
 
 TODO
+
+- sa verific daca la mv, parintele destinatie este acelasi ca si acum
 - sa pot sterge o intrebare
 - header cu culori
 - list all tries

@@ -113,6 +113,9 @@ fn main() {
         else if user_command == "content" {
             update_model_content(&mut conn, &mut current_nodes );
         }
+        else if user_command == "docupdate" {
+            update_documentation_content(&mut conn, &mut current_nodes );
+        }
         else if user_command.len() < 3 {
             print_title();
             print_header(&mut current_nodes);
@@ -146,10 +149,11 @@ fn print_help(current_nodes: &Vec<Node>) {
     help \t\t show this menu \n\
     exit \t\t exit application\n\
     \nMOVE FUNCTIONS\n\
-    sq [id]\t select question [index]\n\
-    cd [id]\t select node [index]\n\
+    sq [id]\t\t select question [index]\n\
+    cd [id]\t\t select node [index]\n\
     out\t\t move out of the current node\n\
-    lat [id]\t\t go to a node of the same parent\n\
+    lat [id]\t go to a node of the same parent\n\
+    mv [id] [to_id]\t Move node with id as child to node with id to_id\n\
     \nLIST FUNCTIONS\n\
     lq\t\t list all questions in database\n\
     ls\t\t Lists the current node and the children\n\
@@ -160,13 +164,13 @@ fn print_help(current_nodes: &Vec<Node>) {
     subq\t\t Add a subquestion to current node\n\
     doc\t\t Add a URL for documentation to current node\n\
     am\t\t Add a model to current node\n\
-    content\t\t Update the current model content\n\
     term\t\t Add a new term to current node\n\
     explain\t\t Add a new explanation for a TERM node\n\
     try\t\t Add a try node to current node\n\
+    content\t\t Update the current model content\n\
+    docupdate\t Update the content of a documentation node \n\
     trycom\t\t Update the comment for a try node\n\
     label\t\t Update the current node label\n\
-    mv [id] [to_id]\t Move node with id as child to node with id to_id\n\
     del [id]\t Delete a node";
 
     println!("{}", help);
@@ -574,6 +578,52 @@ fn update_model_content( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node
 
 }
 
+
+fn update_documentation_content( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
+    // Verific sa am selectat cel putin un nod
+    if current_nodes.len() == 0 {
+        print_all_with_content("Current node must be of type DOCUMENTATION", current_nodes);
+        return;
+    }
+
+    // Verific sa fiu intr-un nod de tip model
+    if current_nodes.get( current_nodes.len() - 1 ).unwrap().node_type != NodeType::Documentation as i32  {
+        print_all_with_content("Current node must be of type DOCUMENTATION", current_nodes);
+        return;
+    }
+
+    print_title();
+    print_header(current_nodes);
+    print_cursor_for_input("New documentation content il iau din /tmp/study.txt ?[y]");
+    let mut answer = String::new();
+    stdin().read_line(&mut answer).expect("Did not enter correct string");
+    answer = answer.trim().to_owned();
+
+    if answer == "y" {
+        let filename = "/tmp/study.txt";
+        let mut documentation = fs::read_to_string(filename).expect("Cannot read the file");
+        documentation = documentation.replace("\"", "\\\"");
+
+        let node_id = current_nodes.get( current_nodes.len() - 1 ).unwrap().node_id;
+
+        db_operations::update_documentation_content(&documentation, node_id, conn);
+
+        // Updatez nodul curent
+        current_nodes.pop();
+        match db_operations::get_node( node_id, conn ) {
+            None => {},
+            Some(updated_node) => current_nodes.push(updated_node),
+        };
+
+        print_all_with_content("Documentation saved", current_nodes);
+    }
+    else {
+        print_all_with_content("Canceled", current_nodes);
+    }
+
+}
+
+
 fn delete_node( argument: &str, conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
     let node_to_delete: i32 = argument.parse().expect("That was not a number");
 
@@ -599,8 +649,7 @@ fn delete_node( argument: &str, conn: &mut my::PooledConn, current_nodes: &mut V
         Some(updated_node) => current_nodes.push(updated_node),
     };
 
-
-    print_all_with_content("Node deleted", current_nodes);
+    list_all_nodes_tree(current_nodes, conn);
 }
 
 
@@ -777,10 +826,12 @@ fn select_question( argument: &str, conn: &mut my::PooledConn, current_nodes: &m
     current_nodes.clear();
     current_nodes.push(node.unwrap());
 
-    print_title();
-    print_header(current_nodes);
-    print_cursor(current_nodes);
+    //print_title();
+    //print_header(current_nodes);
+    //print_cursor(current_nodes);
     
+    list_all_nodes_tree(current_nodes, conn);
+
     let mut first_question_iter = questions.drain(0..1);
     return first_question_iter.next();
 }
