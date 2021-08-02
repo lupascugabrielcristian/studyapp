@@ -3,9 +3,9 @@ I made this project to learn Rust and mysql.
 
 DEPENDENCIES
 ============
-cargo # obviously
-docker # necessary to start the mysql database. 
-Probably if you have a database already runnig, just change the connection url in the code. It's hardcoded :)
+cargo # obviously  
+docker # necessary to start the mysql database.  
+Probably if you have a database already runnig, just change the connection url in the code. It's hardcoded :)  
 
 RUN
 ===
