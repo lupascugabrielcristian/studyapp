@@ -6,6 +6,9 @@ cargo run
 
 TODO
 
+- update res:
+	- res 1
+	- res 0
 - sa verific daca la mv, parintele destinatie este acelasi ca si acum
 - sa pot sterge o intrebare
 - header cu culori

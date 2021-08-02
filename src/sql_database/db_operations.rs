@@ -213,7 +213,7 @@ pub fn update_explanation( explanation: &str, term_id: i32, conn: &mut my::Poole
         }).unwrap();
 }
 
-pub fn add_try_comment( comment: &str, try_id: i32, conn: &mut my::PooledConn ) {
+pub fn update_try_comment( comment: &str, try_id: i32, conn: &mut my::PooledConn ) {
     let update_query = "UPDATE mysql.tries SET comment=\":new_comment\" WHERE node_id=\":try_id\"";
     let update_query = update_query.replace(":new_comment", comment );
     let update_query = update_query.replace(":try_id", &try_id.to_string());
@@ -224,6 +224,20 @@ pub fn add_try_comment( comment: &str, try_id: i32, conn: &mut my::PooledConn ) 
             t.commit()
         }).unwrap();
 }
+
+
+pub fn update_try_result(result: i32, try_id: i32, conn: &mut my::PooledConn ) {
+    let update_query = "UPDATE mysql.tries SET result=':new_result' WHERE node_id=':node_id'";
+    let update_query = update_query.replace(":node_id", &try_id.to_string());
+    let update_query = update_query.replace(":new_result", &result.to_string());
+
+    conn.start_transaction(false, None, None)
+        .and_then(|mut t| {
+            t.query(update_query).unwrap();
+            t.commit()
+        }).unwrap();
+}
+
 
 pub fn update_node_label( new_label: &str, node_id: i32, conn: &mut my::PooledConn ) {
     let update_query = "UPDATE mysql.nodes SET label=\":new_label\" WHERE node_id=\":node_id\"";

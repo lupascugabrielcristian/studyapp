@@ -101,7 +101,12 @@ fn main() {
             add_explanation( &mut conn, &mut current_nodes );
         }
         else if user_command == "trycom" {
-            add_try_comment( &mut conn, &mut current_nodes );
+            update_try_comment( &mut conn, &mut current_nodes );
+        }
+        else if user_command.len() == 5 && &user_command[0..4] == "res " {
+            // Update try result
+            let argument = &user_command[4..];
+            update_try_result( argument, &mut conn, &mut current_nodes);
         }
         else if user_command == "label" {
             update_node_label( &mut conn, &mut current_nodes );
@@ -170,6 +175,7 @@ fn print_help(current_nodes: &Vec<Node>) {
     content\t\t Update the current model content\n\
     docupdate\t Update the content of a documentation node \n\
     trycom\t\t Update the comment for a try node\n\
+    res [val]\t Update the result for a try node\n\
     label\t\t Update the current node label\n\
     del [id]\t Delete a node";
 
@@ -232,6 +238,10 @@ fn print_all_with_content(content: &str, current_nodes: &Vec<Node>) {
     print_cursor(current_nodes);
 }
 
+fn print_cursor_with_text(text: &str) {
+    let (_x, y) =terminal_size().unwrap();
+    println!("{goto}[{text}]: ", goto = cursor::Goto(1,y - 1), text = text )
+}
 
 fn print_cursor(current_nodes: &Vec<Node>) {
     let (_x, y) =terminal_size().unwrap();
@@ -440,7 +450,7 @@ fn add_new_try( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
 }
 
 
-fn add_try_comment( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
+fn update_try_comment( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
 
     if current_nodes.get( current_nodes.len() - 1 ).unwrap().node_type != NodeType::TryNode as i32  {
         print_all_with_content("Not in a TRY node!", current_nodes);
@@ -461,7 +471,7 @@ fn add_try_comment( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
 
         let try_id = current_nodes.get( current_nodes.len() - 1 ).unwrap().node_id;
 
-        db_operations::add_try_comment(&comment, try_id, conn); 
+        db_operations::update_try_comment(&comment, try_id, conn); 
 
         // Updatez current_nodes
         current_nodes.pop();
@@ -477,6 +487,30 @@ fn add_try_comment( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
         print_all_with_content("Canceled", current_nodes);
     }
 }
+
+fn update_try_result( argument: &str, conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
+
+    if current_nodes.len() < 1 && current_nodes.get( current_nodes.len() - 1 ).unwrap().node_type != NodeType::TryNode as i32  {
+        print_all_with_content("Not in a TRY node!", current_nodes);
+        return;
+    }
+
+    let node_id = current_nodes.get( current_nodes.len() - 1 ).unwrap().node_id;
+
+    match argument.parse::<i32>() {
+        Err(_e) => {},
+        Ok(result) => {
+            if result == 0 || result == 1 {
+                db_operations::update_try_result(result, node_id, conn);
+            }
+        },
+    }
+
+    list_all_nodes_tree(current_nodes, conn);
+    print_cursor_with_text("Try updated");
+
+}
+
 
 fn update_node_label( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
     // Sa am selectat un nod care nu este intrebarea principala
