@@ -416,15 +416,20 @@ fn add_explanation( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
     }
 
     let term_id = current_nodes.get( current_nodes.len() - 1 ).unwrap().node_id;
+    
+    print_cursor_with_text("Term explanation. Continutul il iau din /tmp/study.txt. Ready? [y] ");
+    let mut answer = String::new();
+    stdin().read_line(&mut answer).expect("Did not enter correct string");
+    answer = answer.trim().to_owned();
 
-    print_title();
-    print_header(current_nodes);
-    print_cursor_for_input("New explanation:");
-    let mut explanation = String::new();
-    stdin().read_line(&mut explanation).expect("Did not enter correct string");
-    explanation = explanation.trim().to_string();
+    if answer == "y" {
+        let filename = "/tmp/study.txt";
+        let mut explanation = fs::read_to_string(filename).expect("Cannot read the file");
+        explanation = explanation.replace("\"", "\\\"");
 
-    db_operations::update_explanation(&explanation, term_id, conn); 
+        db_operations::update_explanation(&explanation, term_id, conn); 
+    }
+
 
     // Updatez current_nodes
     current_nodes.pop();
@@ -636,7 +641,7 @@ fn update_documentation_content( conn: &mut my::PooledConn, current_nodes: &mut 
         return;
     }
 
-    // Verific sa fiu intr-un nod de tip model
+    // Verific sa fiu intr-un nod de tip documentation
     if current_nodes.get( current_nodes.len() - 1 ).unwrap().node_type != NodeType::Documentation as i32  {
         print_all_with_content("Current node must be of type DOCUMENTATION", current_nodes);
         return;
