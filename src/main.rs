@@ -164,6 +164,7 @@ fn print_help(current_nodes: &Vec<Node>) {
     ls\t\t Lists the current node and the children\n\
     show\t\t Show the content of the node \n\
     all\t\t Show all the nodes tree\n\
+    list docs\t Lists all documentations for current question\n\
     \nADD FUNCTIONS\n\
     q\t\t Add root question with name\n\
     subq\t\t Add a subquestion to current node\n\
@@ -686,10 +687,15 @@ fn delete_node( argument: &str, conn: &mut my::PooledConn, current_nodes: &mut V
     }
 
     // Verific sa nu aiba copii
-    if current_nodes.get( current_nodes.len() - 1 ).unwrap().child_nodes.len() > 0 {
-        print_all_with_content("Cannot delete a node with children", current_nodes);
-        return;
-    }
+    match db_operations::get_node( node_to_delete, conn ) {
+        None => {},
+        Some(node) => {
+            if node.child_nodes.len() > 0 {
+                print_all_with_content("Cannot delete a node with children", current_nodes);
+                return;
+            }
+        }
+    };
     
     db_operations::delete_node(node_to_delete, conn);
 
@@ -833,11 +839,7 @@ fn print_line_with_colors(space: &str, desc: &str, node_type: i32, is_current: b
                     reset = color::Fg(color::Reset));
         },
         x if x == NodeType::Model as i32 => {
-            println!(" {sp}  |__ {color}{desc}{reset}", 
-                    sp = space,
-                    color = color::Fg(color::LightBlue),
-                    desc = desc,
-                    reset = color::Fg(color::Reset));
+            println!(" {}  |__ {}", space, desc);
         },
         x if x == NodeType::TryNode as i32 => {
             println!(" {}  |__ {}", space, desc);
@@ -846,6 +848,13 @@ fn print_line_with_colors(space: &str, desc: &str, node_type: i32, is_current: b
             println!(" {sp}  |__ {color}{desc}{reset}", 
                     sp = space,
                     color = color::Fg(color::LightCyan),
+                    desc = desc,
+                    reset = color::Fg(color::Reset));
+        },
+        x if x == NodeType::Term as i32 => {
+            println!(" {sp}  |__ {color}{desc}{reset}", 
+                    sp = space,
+                    color = color::Fg(color::Yellow),
                     desc = desc,
                     reset = color::Fg(color::Reset));
         },

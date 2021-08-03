@@ -390,6 +390,24 @@ pub fn get_try(node_id: i32, conn: &mut my::PooledConn) -> Option<TryNode> {
     return found.drain(0..1).next();
 }
 
+
+fn _get_all_documentations( conn: &mut my::PooledConn) -> Vec<Documentation> {
+    let query = "SELECT * FROM mysql.documentation";
+
+    let found: Vec<Documentation> =
+    conn.prep_exec(query, ()).map( |result| {
+        result.map(|x| x.unwrap()).map(|row| {
+            let ( node_id, content ) = my::from_row(row);
+            Documentation {
+                node_id,
+                content,
+            }
+        }).collect()
+    }).unwrap();
+
+    return found;
+}
+
 pub fn move_node_to_parent(node_to_copy: i32, parent_node: i32,  conn: &mut my::PooledConn ) {
     // Modific in tabela nodes 
     // Prima data iau parent_node curent si il salvez intr-o variabile @id
