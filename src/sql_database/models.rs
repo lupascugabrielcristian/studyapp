@@ -2,6 +2,7 @@
 pub struct Question {
     pub node_id: i32,
     pub question_text: String,
+    pub root_question: i32,
 }
 
 pub struct Documentation {

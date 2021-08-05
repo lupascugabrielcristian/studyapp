@@ -15,11 +15,15 @@ cargo run
 
 TODO
 
-- lq sa afiseze doar intrebarile primare
 - sa verific daca la mv, parintele destinatie este acelasi ca si acum
 - sa pot sterge o intrebare
+	- pot sa fac asta adaugand o noua coloana la fiecare nod cu ... parent question
 - header cu culori
 - list all: 
 	- terms
 	- models
 	- documentations
+
+
+MySql migration commands
+ALTER TABLE mysql.questions ADD COLUMN root_question int NOT NULL AFTER question_text;

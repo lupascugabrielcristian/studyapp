@@ -19,6 +19,7 @@ fn main() {
     // Aici voi pune nodurile prin care am trecut pana la nodul curent
     // Ultimul element adaugat este nodul curent
     let mut current_nodes: Vec<Node> = Vec::new();
+    let temp_file = "/tmp/study.txt".to_string();
 
     print_title();
     print_cursor(&current_nodes);
@@ -121,6 +122,9 @@ fn main() {
         else if user_command == "docupdate" {
             update_documentation_content(&mut conn, &mut current_nodes );
         }
+        else if user_command == "updatetmp" {
+            sent_content_to_temp_file(&temp_file, &mut conn, &mut current_nodes );
+        }
         else if user_command.len() < 3 {
             print_title();
             print_header(&mut current_nodes);
@@ -173,12 +177,13 @@ fn print_help(current_nodes: &Vec<Node>) {
     term\t\t Add a new term to current node\n\
     explain\t\t Add a new explanation for a TERM node\n\
     try\t\t Add a try node to current node\n\
-    content\t\t Update the current model content\n\
-    docupdate\t Update the content of a documentation node \n\
-    trycom\t\t Update the comment for a try node\n\
-    res [val]\t Update the result for a try node\n\
-    label\t\t Update the current node label\n\
-    del [id]\t Delete a node";
+    content\t\t Update model node content\n\
+    docupdate\t Update documentation node content \n\
+    trycom\t\t Update try node comment\n\
+    res [val]\t Update try node result\n\
+    label\t\t Update node label\n\
+    del [id]\t Delete a node\n\
+    updatetmp\t Update the tmp file with the content of the current node";
 
     println!("{}", help);
     print_cursor(current_nodes);
@@ -323,6 +328,7 @@ fn add_documentation( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> )
     print_cursor_for_input("Doc label");
     let mut label = String::new();
     stdin().read_line(&mut label).expect("Din not enter correct string");
+    label = label.trim().to_owned();
 
     // Cer input de la user pentru content
     print_title();
@@ -716,24 +722,17 @@ fn delete_node( argument: &str, conn: &mut my::PooledConn, current_nodes: &mut V
 
 
 fn list_questions(current_nodes: &mut Vec<Node>, conn: &mut my::PooledConn ) {
-    let query = "SELECT * from questions";
 
-    let questions: Vec<Question> = 
-    conn.prep_exec(query, ()).map( |result| {
-        result.map(|x| x.unwrap()).map(|row| {
-            let ( node_id, question_text ) = my::from_row(row);
-            Question {
-                node_id,
-                question_text,
-            }
-        }).collect()
-    }).unwrap(); // Unwrap `Vec<Question>`
+    let questions: Vec<Question> = db_operations::get_all_questions(conn);
 
     print_title();
     print_header(current_nodes);
     print_content();
 
-    let _v: Vec<_> = questions.iter().map( |q| println!("{}. {}", q.node_id, q.question_text) ).collect();
+    // Aici voi filtra dupa root_question == 1 pentru a elimina din lista, elementele subquestion
+    let _v: Vec<_> = questions.iter()
+        .filter( |q| q.root_question == 1 )
+        .map( |q| println!("{}. {}", q.node_id, q.question_text) ).collect();
 
     print_cursor(current_nodes);
 }
@@ -880,10 +879,11 @@ fn select_question( argument: &str, conn: &mut my::PooledConn, current_nodes: &m
     let mut questions: Vec<Question> =
     conn.prep_exec(query, ()).map( |result| {
         result.map(|x| x.unwrap()).map(|row| {
-            let ( node_id, question_text ) = my::from_row(row);
+            let ( node_id, question_text, root_question ) = my::from_row(row);
             Question {
-                node_id: node_id,
-                question_text: question_text,
+                node_id,
+                question_text,
+                root_question,
             }
         }).collect()
     }).unwrap();
@@ -919,7 +919,7 @@ fn select_node( argument: &str, conn: &mut my::PooledConn, current_nodes: &mut V
             .map( |id_parsed| id_parsed.unwrap_or(-1) )         // dupa parsare rezulta Result. daca este Err, atunci o scot -1
             .filter(|val| val == &node_id )                     // Compar cu valoarea selectata de user
             .count();
-            
+
         if child_count == 0 {
             print_all_with_content( &("Current node has no child with this id ".to_owned() + argument), current_nodes );
             return;
@@ -1040,4 +1040,54 @@ fn show_node_content(conn: &mut my::PooledConn, current_nodes: &mut Vec<Node>) {
         },
         _ => {},
     };
+}
+
+fn sent_content_to_temp_file( temp_file: &str, conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
+
+    let current_node = current_nodes.get( current_nodes.len() - 1 ).unwrap();
+    let mut content = String::new();
+
+    // Functie de ce tip este, caut un tabela corespunzatoare contentul si il afisez in sectiunea
+    // content
+    match current_node.node_type {
+        x if x == NodeType::Documentation as i32 => {
+            match db_operations::get_documentation(current_node.node_id, conn) {
+                None => {},
+                Some(documentation) => content = documentation.content,
+            }
+        },
+        x if x == NodeType::Model as i32 => {
+            match db_operations::get_model(current_node.node_id, conn) {
+                None => {},
+                Some(model) => content = model.content,
+            }
+        },
+        x if x == NodeType::Term as i32 => {
+            match db_operations::get_term(current_node.node_id, conn) {
+                None => {},
+                Some(term) => content = term.explanation,
+            }
+        },
+        x if x == NodeType::TryNode as i32 => {
+            match db_operations::get_try(current_node.node_id, conn) {
+                None => {},
+                Some(try_node) => content = try_node.comment,
+            }
+        },
+        _ => {},
+    };
+
+    content += "\n";
+
+    match fs::write(temp_file, content) {
+        Err(_e) => {
+            list_all_nodes_tree(current_nodes, conn);
+            print_cursor_with_text("Nop, not possible");
+        },
+        Ok(_result) => {
+            list_all_nodes_tree(current_nodes, conn);
+            print_cursor_with_text("Temp file updated");
+        }
+    }
+
 }

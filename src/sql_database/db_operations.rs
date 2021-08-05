@@ -7,10 +7,11 @@ pub fn connect() -> my::PooledConn {
     let mut conn = pool.get_conn().unwrap();
 
     // Questions table
-    // | node_id | question_text |
+    // | node_id | question_text | root_question |
+    // root_question va fi 0 sau 1, subquestions vor avea root_question 0
     if check_for_table(&mut conn, "\'questions\'") == false {
         println!("Creating table questions");
-        let create_table = "CREATE TABLE questions ( node_id INT NOT NULL, question_text TEXT not null)";
+        let create_table = "CREATE TABLE questions ( node_id INT NOT NULL, question_text TEXT NOT NULL, root_question INT NOT NULL)";
         pool.prep_exec(create_table, ()).unwrap();
     }
 
@@ -93,7 +94,7 @@ pub fn save_question( question_text: &String, conn: &mut my::PooledConn ) {
     // si salvez in questions table cu aces node_id
     let add_node_query = "INSERT INTO mysql.nodes ( node_type, child_nodes, parent_node, label ) VALUES(\"0\", \"\", -1, \":label\");
                           SELECT LAST_INSERT_ID() INTO @id;
-                          INSERT INTO mysql.questions( node_id, question_text ) VALUES( @id, \":question_text\")";
+                          INSERT INTO mysql.questions( node_id, question_text, root_question ) VALUES( @id, \":question_text\", 1)";
     let add_node_query = add_node_query.replace(":question_text", &question_text);
     let add_node_query = add_node_query.replace(":label", &question_text);
     conn.start_transaction(false, None, None)
@@ -107,7 +108,7 @@ pub fn save_question( question_text: &String, conn: &mut my::PooledConn ) {
 pub fn add_subquestion( question_text: &str, parent_id: i32, conn: &mut my::PooledConn ) {
     let add_query = "INSERT INTO  mysql.nodes ( node_type, child_nodes, parent_node, label ) VALUES(\"5\", \"\", \":parent_id\", \":label\");
                      SELECT LAST_INSERT_ID() INTO @id;
-                     INSERT INTO mysql.questions( node_id, question_text ) VALUES( @id, \":question_text\");
+                     INSERT INTO mysql.questions( node_id, question_text, root_question ) VALUES( @id, \":question_text\", 0);
                      UPDATE mysql.nodes SET child_nodes=CONCAT(child_nodes,' ',@id) WHERE node_id=\":parent_id\"";
 
     let add_query = add_query.replace(":parent_id", &parent_id.to_string());
@@ -275,6 +276,26 @@ pub fn update_documentation_content( new_content: &str, node_id: i32, conn: &mut
         }).unwrap();
 }
 
+pub fn get_all_questions( conn: &mut my::PooledConn) -> Vec<Question> {
+
+    let query = "SELECT * FROM mysql.questions";
+
+    let questions: Vec<Question> = 
+    conn.prep_exec(query, ()).map( |result| {
+        result.map(|x| x.unwrap()).map(|row| {
+            let ( node_id, question_text, root_question ) = my::from_row(row);
+            Question {
+                node_id,
+                question_text,
+                root_question,
+            }
+        }).collect()
+    }).unwrap(); // Unwrap `Vec<Question>`
+
+
+    return questions;
+}
+
 pub fn get_question(node_id:i32, conn: &mut my::PooledConn) -> Option<Question> {
     let query = "SELECT * FROM questions WHERE node_id=':node_id'";
     let query = query.replace(":node_id", &node_id.to_string() );
@@ -282,10 +303,11 @@ pub fn get_question(node_id:i32, conn: &mut my::PooledConn) -> Option<Question> 
     let mut found_questions: Vec<Question> =
     conn.prep_exec(query, ()).map( |result| {
         result.map(|x| x.unwrap()).map(|row| {
-            let ( node_id, question_text ) = my::from_row(row);
+            let ( node_id, question_text, root_question ) = my::from_row(row);
             Question {
                 node_id,
                 question_text,
+                root_question,
             }
         }).collect()
     }).unwrap();
