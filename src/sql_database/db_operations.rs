@@ -6,22 +6,23 @@ pub fn connect() -> my::PooledConn {
     let pool = my::Pool::new("mysql://root:studymqsql@localhost:3306/mysql").unwrap();
     let mut conn = pool.get_conn().unwrap();
 
+    // Nodes table
+    // | node_id* | node_type | child_nodes | parent_node | parent_question | label |
+    // Child_nodes va fi un string care contine id-urile nodurilor copii, separate cu spatiu ' '
+    // label va fi folosit pentru cursor
+    // parent_question este nodul question de care apartin
+    if check_for_table(&mut conn, "\'nodes\'") == false {
+        println!("Creating nodes table");
+        let create_table = "CREATE TABLE nodes (node_id int NOT NULL AUTO_INCREMENT PRIMARY KEY, node_type INT not null, child_nodes TEXT, parent_node INT, label TEXT NOT NULL )";
+        pool.prep_exec(create_table, ()).unwrap();
+    }
+
     // Questions table
     // | node_id | question_text | root_question |
     // root_question va fi 0 sau 1, subquestions vor avea root_question 0
     if check_for_table(&mut conn, "\'questions\'") == false {
         println!("Creating table questions");
         let create_table = "CREATE TABLE questions ( node_id INT NOT NULL, question_text TEXT NOT NULL, root_question INT NOT NULL)";
-        pool.prep_exec(create_table, ()).unwrap();
-    }
-
-    // Nodes table
-    // | node_id* | node_type | child_nodes | parent_node | label |
-    // Child_nodes va fi un string care contine id-urile nodurilor copii, separate cu spatiu ' '
-    // label va fi folosit pentru cursor
-    if check_for_table(&mut conn, "\'nodes\'") == false {
-        println!("Creating nodes table");
-        let create_table = "CREATE TABLE nodes (node_id int NOT NULL AUTO_INCREMENT PRIMARY KEY, node_type INT not null, child_nodes TEXT, parent_node INT, label TEXT NOT NULL )";
         pool.prep_exec(create_table, ()).unwrap();
     }
 
@@ -70,12 +71,13 @@ pub fn get_node( node_id: i32, conn: &mut my::PooledConn) -> Option<Node> {
     let mut found_nodes: Vec<Node> =
     conn.prep_exec(query, ()).map( |result| {
         result.map(|x| x.unwrap()).map(|row| {
-            let ( node_id, node_type, child_nodes, parent_node, label ) = my::from_row(row);
+            let ( node_id, node_type, child_nodes, parent_node, parent_question, label ) = my::from_row(row);
             Node {
-                node_id: node_id,
-                node_type: node_type,
-                child_nodes: child_nodes,
-                parent_node: parent_node,
+                node_id,
+                node_type,
+                child_nodes,
+                parent_node,
+                parent_question,
                 label: label
             }
         }).collect()
@@ -92,7 +94,7 @@ pub fn save_question( question_text: &String, conn: &mut my::PooledConn ) {
     // Salvez in nodes table, 
     // iau node_id, cu care s-a salvat, 
     // si salvez in questions table cu aces node_id
-    let add_node_query = "INSERT INTO mysql.nodes ( node_type, child_nodes, parent_node, label ) VALUES(\"0\", \"\", -1, \":label\");
+    let add_node_query = "INSERT INTO mysql.nodes ( node_type, child_nodes, parent_node, parent_question, label ) VALUES(\"0\", \"\", -1, 0, \":label\");
                           SELECT LAST_INSERT_ID() INTO @id;
                           INSERT INTO mysql.questions( node_id, question_text, root_question ) VALUES( @id, \":question_text\", 1)";
     let add_node_query = add_node_query.replace(":question_text", &question_text);
@@ -105,13 +107,15 @@ pub fn save_question( question_text: &String, conn: &mut my::PooledConn ) {
 }
 
 
-pub fn add_subquestion( question_text: &str, parent_id: i32, conn: &mut my::PooledConn ) {
-    let add_query = "INSERT INTO  mysql.nodes ( node_type, child_nodes, parent_node, label ) VALUES(\"5\", \"\", \":parent_id\", \":label\");
+// parent_question: id of the parent question node
+pub fn add_subquestion( question_text: &str, parent_id: i32,  parent_question: i32, conn: &mut my::PooledConn ) {
+    let add_query = "INSERT INTO  mysql.nodes ( node_type, child_nodes, parent_node, parent_question, label ) VALUES(\"5\", \"\", \":parent_id\", ':parent_question', \":label\");
                      SELECT LAST_INSERT_ID() INTO @id;
                      INSERT INTO mysql.questions( node_id, question_text, root_question ) VALUES( @id, \":question_text\", 0);
                      UPDATE mysql.nodes SET child_nodes=CONCAT(child_nodes,' ',@id) WHERE node_id=\":parent_id\"";
 
     let add_query = add_query.replace(":parent_id", &parent_id.to_string());
+    let add_query = add_query.replace(":parent_question", &parent_question.to_string());
     let add_query = add_query.replace(":label", question_text);
     let add_query = add_query.replace(":question_text", question_text);
 
@@ -123,14 +127,17 @@ pub fn add_subquestion( question_text: &str, parent_id: i32, conn: &mut my::Pool
 }
 
 
-pub fn save_documentation( label: &String, documentation: &String, parent_id: i32, conn: &mut my::PooledConn ) {
-    // Salvez in nodes tables si folosesc id-ul generat acolo ca sa salvez in documentation table
-    // Updatez nodul parinte sa adaug acest nod ca si child
-    let add_node_query = "INSERT INTO mysql.nodes ( node_type, child_nodes, parent_node, label ) VALUES(\"1\", \"\", \":parent_id\", \":label\");
+// Salvez in nodes tables si folosesc id-ul generat acolo ca sa salvez in documentation table
+// Updatez nodul parinte sa adaug acest nod ca si child
+// parent_question: id of the parent question node
+pub fn save_documentation( label: &String, documentation: &String, parent_id: i32, parent_question: i32, conn: &mut my::PooledConn ) {
+
+    let add_node_query = "INSERT INTO mysql.nodes ( node_type, child_nodes, parent_node, parent_question, label ) VALUES(\"1\", \"\", \":parent_id\", ':parent_question', \":label\");
                         SELECT LAST_INSERT_ID() INTO @id;
                         INSERT INTO mysql.documentation( node_id, content ) VALUES( @id, \":content\");
                         UPDATE mysql.nodes SET child_nodes=CONCAT(child_nodes,' ',@id) WHERE node_id=\":p_i_d\"";
     let add_node_query = add_node_query.replace(":parent_id", &parent_id.to_string());
+    let add_node_query = add_node_query.replace(":parent_question", &parent_question.to_string());
     let add_node_query = add_node_query.replace(":label", &label);
     let add_node_query = add_node_query.replace(":content", &documentation);
     let add_node_query = add_node_query.replace(":p_i_d", &parent_id.to_string());
@@ -144,14 +151,16 @@ pub fn save_documentation( label: &String, documentation: &String, parent_id: i3
 }
 
 
-pub fn save_model( label: &String, documentation: &String, parent_id: i32, conn: &mut my::PooledConn ) {
-    // Salvez in nodes tables si folosesc id-ul generat acolo ca sa salvez in models table
-    // Updatez nodul parinte sa adaug acest nod ca si child node
-    let add_node_query = "INSERT INTO mysql.nodes ( node_type, child_nodes, parent_node, label ) VALUES(\"2\", \"\", \":parent_id\", \":label\");
+// Salvez in nodes tables si folosesc id-ul generat acolo ca sa salvez in models table
+// Updatez nodul parinte sa adaug acest nod ca si child node
+// parent_question: id of the parent question node
+pub fn save_model( label: &String, documentation: &String, parent_id: i32, parent_question_id: i32, conn: &mut my::PooledConn ) {
+    let add_node_query = "INSERT INTO mysql.nodes ( node_type, child_nodes, parent_node, parent_question, label ) VALUES(\"2\", \"\", \":parent_id\", ':parent_question', \":label\");
                         SELECT LAST_INSERT_ID() INTO @id;
                         INSERT INTO mysql.models( node_id, content ) VALUES( @id, \":content\");
                         UPDATE mysql.nodes SET child_nodes=CONCAT(child_nodes,' ',@id) WHERE node_id=\":p_i_d\"";
     let add_node_query = add_node_query.replace(":parent_id", &parent_id.to_string());
+    let add_node_query = add_node_query.replace(":parent_question", &parent_question_id.to_string());
     let add_node_query = add_node_query.replace(":label", &label);
     let add_node_query = add_node_query.replace(":content", &documentation);
     let add_node_query = add_node_query.replace(":p_i_d", &parent_id.to_string());
@@ -165,14 +174,16 @@ pub fn save_model( label: &String, documentation: &String, parent_id: i32, conn:
 }
 
 
-pub fn save_term( term: &str, parent_id: i32, conn: &mut my::PooledConn ) {
-    // Salvez in nodes table si folosesc id-ul generat acolo ca sa salvez in terms table
-    // Updatez nodul parinte sa adaug acest nod ca si child node
-    let add_node_query = "INSERT INTO mysql.nodes ( node_type, child_nodes, parent_node, label ) VALUES(\"3\", \"\", \":parent_id\", \":label\");
+// Salvez in nodes table si folosesc id-ul generat acolo ca sa salvez in terms table
+// Updatez nodul parinte sa adaug acest nod ca si child node
+// parent_question: id of the parent question node
+pub fn save_term( term: &str, parent_id: i32, parent_question_id: i32, conn: &mut my::PooledConn ) {
+    let add_node_query = "INSERT INTO mysql.nodes ( node_type, child_nodes, parent_node, parent_question, label ) VALUES(\"3\", \"\", \":parent_id\", ':parent_question_id', \":label\");
                         SELECT LAST_INSERT_ID() INTO @id;
                         INSERT INTO mysql.terms( node_id, term, explanation ) VALUES( @id, \":new_term\", \"\");
                         UPDATE mysql.nodes SET child_nodes=CONCAT(child_nodes,' ',@id) WHERE node_id=\":p_i_d\"";
     let add_node_query = add_node_query.replace(":parent_id", &parent_id.to_string());
+    let add_node_query = add_node_query.replace(":parent_question_id", &parent_question_id.to_string());
     let add_node_query = add_node_query.replace(":label", term);
     let add_node_query = add_node_query.replace(":new_term", term);
     let add_node_query = add_node_query.replace(":p_i_d", &parent_id.to_string());
@@ -185,14 +196,16 @@ pub fn save_term( term: &str, parent_id: i32, conn: &mut my::PooledConn ) {
 }
 
 
-pub fn save_try( try_node_label: &str, parent_id: i32, conn: &mut my::PooledConn ) {
-    // Salvez in nodes table si folosesc id-ul generat acolo ca sa salvez in terms table
-    // Updatez nodul parinte sa adaug acest nod ca si child node
-    let add_node_query = "INSERT INTO mysql.nodes ( node_type, child_nodes, parent_node, label ) VALUES(\"4\", \"\", \":parent_id\", \":label\");
+// Salvez in nodes table si folosesc id-ul generat acolo ca sa salvez in terms table
+// Updatez nodul parinte sa adaug acest nod ca si child node
+// parent_question_id: id of the parent question node
+pub fn save_try( try_node_label: &str, parent_id: i32, parent_question_id: i32, conn: &mut my::PooledConn ) {
+    let add_node_query = "INSERT INTO mysql.nodes ( node_type, child_nodes, parent_node, parent_question, label ) VALUES(\"4\", \"\", \":parent_id\", ':parent_question_id', \":label\");
                         SELECT LAST_INSERT_ID() INTO @id;
                         INSERT INTO mysql.tries( node_id, result, comment ) VALUES( @id, -1, \"\");
                         UPDATE mysql.nodes SET child_nodes=CONCAT(child_nodes,' ',@id) WHERE node_id=\":parent_id\"";
     let add_node_query = add_node_query.replace(":parent_id", &parent_id.to_string());
+    let add_node_query = add_node_query.replace(":parent_question_id", &parent_question_id.to_string());
     let add_node_query = add_node_query.replace(":label", try_node_label);
 
     conn.start_transaction(false, None, None)
@@ -413,8 +426,10 @@ pub fn get_try(node_id: i32, conn: &mut my::PooledConn) -> Option<TryNode> {
 }
 
 
-fn _get_all_documentations( conn: &mut my::PooledConn) -> Vec<Documentation> {
-    let query = "SELECT * FROM mysql.documentation";
+pub fn get_all_documentations(parent_question_id: i32, conn: &mut my::PooledConn) -> Vec<Documentation> {
+    let query = "SELECT * FROM mysql.documentation WHERE node_id IN 
+        ( SELECT node_id FROM mysql.nodes where parent_question=':parent_question_id')";
+    let query = query.replace(":parent_question_id", &parent_question_id.to_string() );
 
     let found: Vec<Documentation> =
     conn.prep_exec(query, ()).map( |result| {
@@ -423,6 +438,27 @@ fn _get_all_documentations( conn: &mut my::PooledConn) -> Vec<Documentation> {
             Documentation {
                 node_id,
                 content,
+            }
+        }).collect()
+    }).unwrap();
+
+    return found;
+}
+
+
+pub fn get_all_tries(parent_question_id: i32, conn: &mut my::PooledConn) -> Vec<TryNode> {
+    let query = "SELECT * FROM mysql.tries WHERE node_id IN 
+        ( SELECT node_id FROM mysql.nodes where parent_question=':parent_question_id')";
+    let query = query.replace(":parent_question_id", &parent_question_id.to_string() );
+
+    let found: Vec<TryNode> =
+    conn.prep_exec(query, ()).map( |result| {
+        result.map(|x| x.unwrap()).map(|row| {
+            let ( node_id, result, comment ) = my::from_row(row);
+            TryNode {
+                node_id,
+                result,
+                comment,
             }
         }).collect()
     }).unwrap();

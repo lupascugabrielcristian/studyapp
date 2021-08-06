@@ -32,6 +32,7 @@ pub struct Node {
     pub node_type: i32,
     pub child_nodes: String,
     pub parent_node: i32,
+    pub parent_question: i32,
     pub label: String
 }
 

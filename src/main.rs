@@ -10,7 +10,7 @@ use mysql as my;
 
 mod sql_database;
 use crate::sql_database::db_operations;
-use crate::sql_database::models::{ Question, Node, NodeType };
+use crate::sql_database::models::{ Question, Node, NodeType, Documentation, TryNode };
 
 fn main() {
     let mut user_command = String::new();
@@ -43,7 +43,7 @@ fn main() {
             // Add a subquestion
             add_subquestion(&mut current_nodes, &mut conn);
         }
-        else if user_command == "am" {
+        else if user_command == "model" {
             // Add model
             add_model( &mut conn, &mut current_nodes);
         }
@@ -62,6 +62,14 @@ fn main() {
         else if user_command == "lq" {
             // List questions
             list_questions(&mut current_nodes, &mut conn );
+        }
+        else if user_command == "docs" {
+            // List all documentation nodes for the current question
+            list_documentations(&mut current_nodes, &mut conn);
+        }
+        else if user_command == "tries" {
+            // List all tries nodes for the current question
+            list_all_tries(&mut current_nodes, &mut conn);
         }
         else if user_command == "all" {
             // Show all nodes tree
@@ -158,32 +166,40 @@ fn print_help(current_nodes: &Vec<Node>) {
     help \t\t show this menu \n\
     exit \t\t exit application\n\
     \nMOVE FUNCTIONS\n\
+    ===============\n\
     sq [id]\t\t select question [index]\n\
     cd [id]\t\t select node [index]\n\
     out\t\t move out of the current node\n\
     lat [id]\t go to a node of the same parent\n\
     mv [id] [to_id]\t Move node with id as child to node with id to_id\n\
     \nLIST FUNCTIONS\n\
+    ===============\n\
     lq\t\t list all questions in database\n\
     ls\t\t Lists the current node and the children\n\
     show\t\t Show the content of the node \n\
     all\t\t Show all the nodes tree\n\
-    list docs\t Lists all documentations for current question\n\
+    docs\t\t Lists all documentations for current question\n\
+    tries\t\t List all tries for current question\n\
     \nADD FUNCTIONS\n\
+    ==============\n\
     q\t\t Add root question with name\n\
     subq\t\t Add a subquestion to current node\n\
     doc\t\t Add a URL for documentation to current node\n\
-    am\t\t Add a model to current node\n\
+    model\t\t Add a model to current node\n\
     term\t\t Add a new term to current node\n\
-    explain\t\t Add a new explanation for a TERM node\n\
     try\t\t Add a try node to current node\n\
-    content\t\t Update model node content\n\
-    docupdate\t Update documentation node content \n\
-    trycom\t\t Update try node comment\n\
-    res [val]\t Update try node result\n\
+    content\t\t Update MODEL node content\n\
+    docupdate\t Update DOCUMENTATION node content \n\
+    explain\t\t Update EXPLANATION for a TERM node\n\
+    trycom\t\t Update TRY node comment\n\
+    res [val]\t Update TRY node result\n\
     label\t\t Update node label\n\
+    updatetmp\t Update the tmp file with the content of the current node\n\
+    \nDELETE FUNCTIONS\n\
+    ==============\n\
     del [id]\t Delete a node\n\
-    updatetmp\t Update the tmp file with the content of the current node";
+    delq [id]\t Delete a question(Not implemented)\n\
+    ";
 
     println!("{}", help);
     print_cursor(current_nodes);
@@ -287,8 +303,9 @@ fn add_subquestion(current_nodes: &mut Vec<Node>, conn: &mut my::PooledConn ) {
     let question = question.trim(); 
 
     let parent_node_id = current_nodes.get( current_nodes.len() - 1 ).unwrap().node_id;
+    let parent_question_id = current_nodes.get(0).unwrap().node_id;
 
-    db_operations::add_subquestion(&question, parent_node_id, conn);
+    db_operations::add_subquestion(&question, parent_node_id, parent_question_id, conn);
 
     // Updatez current_nodes
     current_nodes.pop();
@@ -321,6 +338,7 @@ fn ask_question(current_nodes: &mut Vec<Node>, conn: &mut my::PooledConn ) {
 /// Dupa operatia asta raman in acelasi nod pentru a putea adauga in continuare daca este cazul
 fn add_documentation( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
     let parent_node_id = current_nodes.get( current_nodes.len() - 1 ).unwrap().node_id;
+    let parent_question_id = current_nodes.get(0).unwrap().node_id;
 
     // Cer input de la user pentru label
     print_title();
@@ -349,7 +367,7 @@ fn add_documentation( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> )
     documentation = documentation.replace("\"", "\\\"");
     documentation = documentation.trim().to_string(); 
 
-    db_operations::save_documentation(&label, &documentation, parent_node_id, conn);
+    db_operations::save_documentation(&label, &documentation, parent_node_id, parent_question_id, conn);
 
     // Updatez nodul curent
     current_nodes.pop();
@@ -365,6 +383,7 @@ fn add_documentation( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> )
 /// Adaug model la ultimul nod in care am intrat. Nu intru in noul nod, dupa ce il adaug
 fn add_model( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
     let parent_node_id = current_nodes.get( current_nodes.len() - 1 ).unwrap().node_id;
+    let parent_question_id = current_nodes.get(0).unwrap().node_id;
 
     print_title();
     print_header(current_nodes);
@@ -377,7 +396,7 @@ fn add_model( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
     let mut model = fs::read_to_string(filename).expect("Cannot read the file");
     model = model.replace("\"", "\\\"");
 
-    db_operations::save_model(&label, &model, parent_node_id, conn);
+    db_operations::save_model(&label, &model, parent_node_id, parent_question_id, conn);
 
     // Updatez nodul curent
     current_nodes.pop();
@@ -392,6 +411,7 @@ fn add_model( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
 
 fn add_new_term( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
     let parent_node_id = current_nodes.get( current_nodes.len() - 1 ).unwrap().node_id;
+    let parent_question_id = current_nodes.get(0).unwrap().node_id;
 
     // Cer input de la user pentru noul termen. term va fi si labelul nodului
     print_title();
@@ -401,7 +421,7 @@ fn add_new_term( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
     stdin().read_line(&mut term).expect("Did not enter correct string");
     term = term.trim().to_string();
 
-    db_operations::save_term(&term, parent_node_id, conn);
+    db_operations::save_term(&term, parent_node_id, parent_question_id, conn);
 
     // Updatez current_nodes
     current_nodes.pop();
@@ -451,6 +471,7 @@ fn add_explanation( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
 
 fn add_new_try( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
     let parent_node_id = current_nodes.get( current_nodes.len() - 1 ).unwrap().node_id;
+    let parent_question_id = current_nodes.get(0).unwrap().node_id;
 
     // Cer input de la user pentru noul try node pentru label-ul nodului
     print_title();
@@ -460,7 +481,7 @@ fn add_new_try( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
     stdin().read_line(&mut try_node).expect("Did not enter correct string");
     try_node = try_node.trim().to_string();
 
-    db_operations::save_try(&try_node, parent_node_id, conn);
+    db_operations::save_try(&try_node, parent_node_id, parent_question_id, conn);
 
     // Updatez current_nodes
     current_nodes.pop();
@@ -737,6 +758,70 @@ fn list_questions(current_nodes: &mut Vec<Node>, conn: &mut my::PooledConn ) {
     print_cursor(current_nodes);
 }
 
+fn list_documentations(current_nodes: &mut Vec<Node>, conn: &mut my::PooledConn ) {
+    if current_nodes.len() == 0 {
+        print_all_with_content("No current selection", current_nodes );
+        return;
+    }
+
+    let parent_question_id = current_nodes.get(0).unwrap().node_id;
+
+    let documentations: Vec<Documentation> = db_operations::get_all_documentations( parent_question_id, conn );
+
+    print_title();
+    print_header(current_nodes);
+    print_content();
+
+    documentations.iter().for_each( |doc| {
+        println!("{color}Documentation node id {node_id}{reset}", 
+                    color = color::Fg(color::LightGreen),
+                    node_id = doc.node_id, 
+                    reset = color::Fg(color::Reset));
+        println!("=======================\n\n");
+        println!("{}", doc.content);
+        println!("\n");
+    });
+
+    print_cursor(current_nodes);
+}
+
+
+fn list_all_tries(current_nodes: &mut Vec<Node>, conn: &mut my::PooledConn ) {
+    if current_nodes.len() == 0 {
+        print_all_with_content("No current selection", current_nodes );
+        return;
+    }
+
+    let parent_question_id = current_nodes.get(0).unwrap().node_id;
+
+    let tries: Vec<TryNode> = db_operations::get_all_tries( parent_question_id, conn );
+
+    print_title();
+    print_header(current_nodes);
+    print_content();
+
+    tries.iter().for_each( |try_node| {
+        println!("{color}Try node id {node_id}{reset}", 
+                    color = color::Fg(color::LightBlue),
+                    node_id = try_node.node_id, 
+                    reset = color::Fg(color::Reset));
+        println!("================\n");
+
+        if try_node.result == 1 {
+            println!("SUCCESS");
+        }
+        else {
+            println!("FAILED");
+        }
+
+        println!("{}", try_node.comment);
+        println!("\n");
+    });
+
+    print_cursor(current_nodes);
+}
+
+
 fn list_node(current_nodes: &mut Vec<Node>, conn: &mut my::PooledConn ) {
     if current_nodes.len() == 0 {
         print_all_with_content("No current selection", current_nodes );
@@ -892,10 +977,6 @@ fn select_question( argument: &str, conn: &mut my::PooledConn, current_nodes: &m
     current_nodes.clear();
     current_nodes.push(node.unwrap());
 
-    //print_title();
-    //print_header(current_nodes);
-    //print_cursor(current_nodes);
-    
     list_all_nodes_tree(current_nodes, conn);
 
     let mut first_question_iter = questions.drain(0..1);
@@ -937,7 +1018,6 @@ fn select_node( argument: &str, conn: &mut my::PooledConn, current_nodes: &mut V
         },
         Some(node) => {
             current_nodes.push(node);
-            //show_node_content(conn, current_nodes);
             list_all_nodes_tree(current_nodes, conn);
         },
     }
