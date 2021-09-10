@@ -466,6 +466,46 @@ pub fn get_all_tries(parent_question_id: i32, conn: &mut my::PooledConn) -> Vec<
     return found;
 }
 
+pub fn get_all_models( parent_question_id: i32, conn: &mut my::PooledConn) -> Vec<Model> {
+    let query = "SELECT * from mysql.models WHERE node_id IN
+                ( SELECT node_id FROM mysql.nodes WHERE parent_question=':parent_question_id')";
+    let query = query.replace(":parent_question_id", &parent_question_id.to_string() );
+
+    let found: Vec<Model> =
+        conn.prep_exec( query, () ).map( |result| {
+            result.map(|x| x.unwrap()).map(|row| {
+                let ( node_id, content ) = my::from_row(row);
+                Model {
+                    node_id,
+                    content,
+                }
+            }).collect()
+        }).unwrap();
+
+    return found;
+}
+
+
+pub fn get_all_terms( parent_question_id: i32, conn: &mut my::PooledConn) -> Vec<Term> {
+    let query = "SELECT * from mysql.terms WHERE node_id IN
+                ( SELECT node_id FROM mysql.nodes WHERE parent_question=':parent_question_id')";
+    let query = query.replace(":parent_question_id", &parent_question_id.to_string() );
+
+    let found: Vec<Term> =
+        conn.prep_exec( query, () ).map( |result| {
+            result.map(|x| x.unwrap()).map(|row| {
+                let ( node_id, term, explanation ) = my::from_row(row);
+                Term {
+                    node_id,
+                    term,
+                    explanation,
+                }
+            }).collect()
+        }).unwrap();
+
+    return found;
+}
+
 pub fn move_node_to_parent(node_to_copy: i32, parent_node: i32,  conn: &mut my::PooledConn ) {
     // Modific in tabela nodes 
     // Prima data iau parent_node curent si il salvez intr-o variabile @id

@@ -5,21 +5,28 @@ extern crate mysql;
 use std::io::stdin;
 use std::iter;
 use std::fs;
+use std::path;
 use termion::{ color, clear, cursor, terminal_size };
 use mysql as my;
 
 mod sql_database;
 use crate::sql_database::db_operations;
-use crate::sql_database::models::{ Question, Node, NodeType, Documentation, TryNode };
+use crate::sql_database::models::{ Question, Node, NodeType, Documentation, TryNode, Model, Term };
 
 fn main() {
     let mut user_command = String::new();
     let mut conn:my::PooledConn = db_operations::connect();
+    
 
     // Aici voi pune nodurile prin care am trecut pana la nodul curent
     // Ultimul element adaugat este nodul curent
     let mut current_nodes: Vec<Node> = Vec::new();
-    let temp_file = "/tmp/study.txt".to_string();
+    let temp_file_path = "/tmp/study.txt".to_string();
+    if path::Path::new(&temp_file_path).exists() == false {
+        fs::File::create(&temp_file_path).map(|_err| {
+            print_all_with_content("Cannot write study.txt", &mut current_nodes );
+        }).ok();
+    }
 
     print_title();
     list_questions(&mut current_nodes, &mut conn );
@@ -71,6 +78,14 @@ fn main() {
         else if user_command == "tries" {
             // List all tries nodes for the current question
             list_all_tries(&mut current_nodes, &mut conn);
+        }
+        else if user_command == "models" {
+            // List all models nodes for the current question
+            list_all_models(&mut current_nodes, &mut conn);
+        }
+        else if user_command == "terms" {
+            // List all terms nodes for the current question
+            list_all_terms(&mut current_nodes, &mut conn);
         }
         else if user_command == "all" {
             // Show all nodes tree
@@ -136,7 +151,7 @@ fn main() {
             update_documentation_content(&mut conn, &mut current_nodes );
         }
         else if user_command == "updatetmp" {
-            sent_content_to_temp_file(&temp_file, &mut conn, &mut current_nodes );
+            sent_content_to_temp_file(&temp_file_path, &mut conn, &mut current_nodes );
         }
         else if user_command.len() < 3 {
             print_title();
@@ -186,6 +201,8 @@ fn print_help(current_nodes: &Vec<Node>) {
     all\t\t Show all the nodes tree\n\
     docs\t\t Lists all documentations for current question\n\
     tries\t\t List all tries for current question\n\
+    models\t\t List all models for current question\n\
+    terms\t\t List all terms for current question\n\
     \nADD FUNCTIONS\n\
     ==============\n\
     q\t\t Add root question with name\n\
@@ -629,6 +646,16 @@ fn move_node(arguments: &str,  conn: &mut my::PooledConn, current_nodes: &mut Ve
         return;
     }
 
+    // Verific ca id-ul mutat sa nu fie nici in parintii nodului curent
+    let nodes_found: Vec<&Node> = current_nodes.iter()
+        .filter( |n| n.node_id == node_to_copy )
+        .collect();
+    
+    if nodes_found.len() > 0 {
+        print_all_with_content("Cannot copy parent node", current_nodes);
+        return;
+    }
+
     db_operations::move_node_to_parent(node_to_copy, parent_node, conn);
 
     list_all_nodes_tree(current_nodes, conn);
@@ -839,7 +866,7 @@ fn list_documentations(current_nodes: &mut Vec<Node>, conn: &mut my::PooledConn 
 
 fn list_all_tries(current_nodes: &mut Vec<Node>, conn: &mut my::PooledConn ) {
     if current_nodes.len() == 0 {
-        print_all_with_content("No current selection", current_nodes );
+        print_all_with_content("No question selected", current_nodes );
         return;
     }
 
@@ -880,6 +907,72 @@ fn list_all_tries(current_nodes: &mut Vec<Node>, conn: &mut my::PooledConn ) {
     print_cursor(current_nodes);
 }
 
+fn list_all_models( current_nodes: &mut Vec<Node>, conn: &mut my::PooledConn ) {
+    if current_nodes.len() == 0 {
+        print_all_with_content("No question selected", current_nodes );
+        return;
+    }
+
+    let parent_question_id = current_nodes.get(0).unwrap().node_id;
+
+    let models: Vec<Model> = db_operations::get_all_models( parent_question_id, conn );
+
+    print_title();
+    print_header(current_nodes);
+    print_content();
+
+    models.iter().for_each( |model| {
+        match db_operations::get_node( model.node_id, conn ) {
+            None => println!("{color} Model {node_id}{reset}",
+                             color = color::Fg(color::Yellow),
+                             node_id = model.node_id,
+                             reset = color::Fg(color::Reset)),
+            Some(n) => println!("{color} Model [{node_id}]: {node_label} {reset}",
+                             color = color::Fg(color::Yellow),
+                             node_id = model.node_id,
+                             node_label = n.label,
+                             reset = color::Fg(color::Reset))
+        }
+
+        println!("================\n");
+        println!("{}", model.content);
+        println!("\n");
+    });
+}
+
+
+fn list_all_terms( current_nodes: &mut Vec<Node>, conn: &mut my::PooledConn ) {
+    if current_nodes.len() == 0 {
+        print_all_with_content("No question selected", current_nodes );
+        return;
+    }
+
+    let parent_question_id = current_nodes.get(0).unwrap().node_id;
+
+    let terms: Vec<Term> = db_operations::get_all_terms( parent_question_id, conn );
+
+    print_title();
+    print_header(current_nodes);
+    print_content();
+
+    terms.iter().for_each( |term| {
+        match db_operations::get_node( term.node_id, conn ) {
+            None => println!("{color} Term {node_id}{reset}",
+                             color = color::Fg(color::Yellow),
+                             node_id = term.node_id,
+                             reset = color::Fg(color::Reset)),
+            Some(n) => println!("{color} Term [{node_id}]: {node_label} {reset}",
+                             color = color::Fg(color::Yellow),
+                             node_id = term.node_id,
+                             node_label = n.label,
+                             reset = color::Fg(color::Reset))
+        }
+
+        println!("================\n");
+        println!("{}", term.explanation);
+        println!("\n");
+    });
+}
 
 fn list_node(current_nodes: &mut Vec<Node>, conn: &mut my::PooledConn ) {
     if current_nodes.len() == 0 {
@@ -1014,32 +1107,24 @@ fn print_line_with_colors(space: &str, desc: &str, node_type: i32, is_current: b
 
 // Vreau sa primesc aici un numar. Numarul reprezinta id-ul randului question din tabela questions
 // Extrag din baza de date intrebarea cu acel id
-fn select_question( argument: &str, conn: &mut my::PooledConn, current_nodes: &mut Vec<Node>) -> Option<Question> {
+fn select_question( argument: &str, conn: &mut my::PooledConn, current_nodes: &mut Vec<Node>) {
     let question_index: i32 = argument.parse().expect("That was not a number");
 
-    let query = "SELECT * FROM questions WHERE node_id=':node_id'";
-    let query = query.replace(":node_id", &question_index.to_string());
+    match db_operations::get_node( question_index, conn ) {
+        None => {
+            print_title();
+            print_header(current_nodes);
+            print_content();
+            println!("Node {} not found", question_index);
+            print_cursor(current_nodes);
+        },
+        Some(node) => {
+            current_nodes.clear();
+            current_nodes.push(node);
 
-    let mut questions: Vec<Question> =
-    conn.prep_exec(query, ()).map( |result| {
-        result.map(|x| x.unwrap()).map(|row| {
-            let ( node_id, question_text, root_question ) = my::from_row(row);
-            Question {
-                node_id,
-                question_text,
-                root_question,
-            }
-        }).collect()
-    }).unwrap();
-
-    let node = db_operations::get_node( question_index, conn );
-    current_nodes.clear();
-    current_nodes.push(node.unwrap());
-
-    list_all_nodes_tree(current_nodes, conn);
-
-    let mut first_question_iter = questions.drain(0..1);
-    return first_question_iter.next();
+            list_all_nodes_tree(current_nodes, conn);
+        },
+    }
 }
 
 
