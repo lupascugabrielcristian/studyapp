@@ -22,6 +22,7 @@ fn main() {
     let temp_file = "/tmp/study.txt".to_string();
 
     print_title();
+    list_questions(&mut current_nodes, &mut conn );
     print_cursor(&current_nodes);
 
     loop {
@@ -88,6 +89,10 @@ fn main() {
         else if user_command.len() > 3 && &user_command[0..4].to_string() == "del " {
             let node_to_delete = &user_command[4..];
             delete_node( node_to_delete, &mut conn, &mut current_nodes );
+        }
+        else if user_command.len() > 4 && &user_command[0..5].to_string() == "delq " {
+            let question_to_delete = &user_command[5..];
+            delete_question( question_to_delete, &mut conn, &mut current_nodes );
         }
         else if user_command == "out" {
             // Node out 
@@ -163,6 +168,7 @@ fn print_help(current_nodes: &Vec<Node>) {
     print_content();
 
     let help = "\
+    STUDY APP is a hierarchical and visual way of managing the process of finding solution to a problem. The user starts from a question node, and adds diferent types of nodes as he discovers new terms, documentation, ideas.. The types of nodes are model, documentation, term, try and subquestion.\n\n\n\
     help \t\t show this menu \n\
     exit \t\t exit application\n\
     \nMOVE FUNCTIONS\n\
@@ -198,7 +204,7 @@ fn print_help(current_nodes: &Vec<Node>) {
     \nDELETE FUNCTIONS\n\
     ==============\n\
     del [id]\t Delete a node\n\
-    delq [id]\t Delete a question(Not implemented)\n\
+    delq [id]\t Delete a question\n\
     ";
 
     println!("{}", help);
@@ -330,7 +336,7 @@ fn ask_question(current_nodes: &mut Vec<Node>, conn: &mut my::PooledConn ) {
     question = question.trim().to_string(); 
     db_operations::save_question( &question, conn );
 
-    list_all_nodes_tree(current_nodes, conn);
+    list_questions(current_nodes, conn);
     print_cursor_with_text("question saved");
 }
 
@@ -385,12 +391,27 @@ fn add_model( conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
     let parent_node_id = current_nodes.get( current_nodes.len() - 1 ).unwrap().node_id;
     let parent_question_id = current_nodes.get(0).unwrap().node_id;
 
+    // Cer input de la user pentru model node label
     print_title();
     print_header(current_nodes);
-    print_cursor_for_input("Model label. Content il iau din /tmp/study.txt ?");
+    print_cursor_for_input("Model label");
     let mut label = String::new();
     stdin().read_line(&mut label).expect("Did not enter correct string");
     label = label.trim().to_string();
+
+    // Cer input de la user pentru model content
+    print_title();
+    print_header(current_nodes);
+    print_cursor_for_input("Model content. Content il iau din /tmp/study.txt. Ready?");
+
+    let mut answer = String::new();
+    stdin().read_line(&mut answer).expect("Did not enter correct string");
+    answer = answer.trim().to_owned();
+
+    if answer != "y" {
+        print_all_with_content("Canceled", current_nodes);
+        return;
+    }
 
     let filename = "/tmp/study.txt";
     let mut model = fs::read_to_string(filename).expect("Cannot read the file");
@@ -741,6 +762,23 @@ fn delete_node( argument: &str, conn: &mut my::PooledConn, current_nodes: &mut V
     list_all_nodes_tree(current_nodes, conn);
 }
 
+fn delete_question( argument: &str, conn: &mut my::PooledConn, current_nodes: &mut Vec<Node> ) {
+    let question_to_delete: i32 = argument.parse().expect("That was not a number");
+
+    // Verific sa nu fie intrebarea curenta
+    if current_nodes.len() > 0 {
+        let current_question_id = current_nodes.get(0).unwrap().node_id;
+        if current_question_id == question_to_delete {
+            print_all_with_content("Cannot delete current question", current_nodes);
+            return;
+        }
+    }
+
+    db_operations::delete_question(question_to_delete, conn);
+
+    list_questions(current_nodes, conn);
+}
+
 
 fn list_questions(current_nodes: &mut Vec<Node>, conn: &mut my::PooledConn ) {
 
@@ -773,10 +811,23 @@ fn list_documentations(current_nodes: &mut Vec<Node>, conn: &mut my::PooledConn 
     print_content();
 
     documentations.iter().for_each( |doc| {
-        println!("{color}Documentation node id {node_id}{reset}", 
+
+        match db_operations::get_node( doc.node_id, conn) {
+            None => println!("{color}Documentation node id {node_id}{reset}", 
                     color = color::Fg(color::LightGreen),
                     node_id = doc.node_id, 
-                    reset = color::Fg(color::Reset));
+                    reset = color::Fg(color::Reset)),
+            Some( n ) => println!("{color}Documentation [{node_id}]: {node_label}{reset}", 
+                    color = color::Fg(color::LightGreen),
+                    node_id = doc.node_id,
+                    node_label = n.label,
+                    reset = color::Fg(color::Reset)),
+        }
+
+        //println!("{color}Documentation node id {node_id}{reset}", 
+        //            color = color::Fg(color::LightGreen),
+        //            node_id = doc.node_id, 
+        //            reset = color::Fg(color::Reset));
         println!("=======================\n\n");
         println!("{}", doc.content);
         println!("\n");
@@ -801,10 +852,18 @@ fn list_all_tries(current_nodes: &mut Vec<Node>, conn: &mut my::PooledConn ) {
     print_content();
 
     tries.iter().for_each( |try_node| {
-        println!("{color}Try node id {node_id}{reset}", 
-                    color = color::Fg(color::LightBlue),
-                    node_id = try_node.node_id, 
-                    reset = color::Fg(color::Reset));
+
+        match db_operations::get_node( try_node.node_id, conn ) {
+            None => println!("{color}Try node id {node_id}{reset}", 
+                        color = color::Fg(color::LightBlue),
+                        node_id = try_node.node_id, 
+                        reset = color::Fg(color::Reset)),
+            Some( n ) => println!("{color}Try node [{node_id}]: {node_label} {reset}", 
+                        color = color::Fg(color::LightBlue),
+                        node_id = try_node.node_id, 
+                        node_label = n.label,
+                        reset = color::Fg(color::Reset))
+        }
         println!("================\n");
 
         if try_node.result == 1 {

@@ -291,7 +291,7 @@ pub fn update_documentation_content( new_content: &str, node_id: i32, conn: &mut
 
 pub fn get_all_questions( conn: &mut my::PooledConn) -> Vec<Question> {
 
-    let query = "SELECT * FROM mysql.questions";
+    let query = "SELECT * FROM mysql.questions where root_question=1";
 
     let questions: Vec<Question> = 
     conn.prep_exec(query, ()).map( |result| {
@@ -500,6 +500,28 @@ pub fn delete_node(node_id: i32, conn: &mut my::PooledConn ) {
 
     conn.start_transaction(false, None, None)
         .and_then(|mut t| {
+            t.query(delete_query).unwrap();
+            t.commit()
+        }).unwrap();
+}
+
+pub fn delete_question(node_id: i32, conn: &mut my::PooledConn) {
+    // Va sterge intrebarea si nodurile aferente intrebarii adica cele care au parent_question == node_id
+    // Va sterge din questions, cele care nu sunt root dar sunt copii ale intrebarii pe care o sterg acum
+
+    let delete_subquestions_query = "DELETE FROM questions WHERE node_id IN 
+                                    ( SELECT node_id FROM nodes WHERE node_type=5 AND parent_question=':q_node_id' )";
+
+    let delete_subquestions_query = delete_subquestions_query.replace(":q_node_id", &node_id.to_string());
+
+    let delete_query = "DELETE FROM mysql.questions WHERE node_id=':q_node_id';
+                        DELETE FROM mysql.nodes WHERE parent_question=':q_node_id';
+                        DELETE FROM mysql.nodes WHERE node_id=':q_node_id'";
+    let delete_query = delete_query.replace(":q_node_id", &node_id.to_string());
+
+    conn.start_transaction(false, None, None)
+        .and_then(|mut t| {
+            t.query(delete_subquestions_query).unwrap();
             t.query(delete_query).unwrap();
             t.commit()
         }).unwrap();
