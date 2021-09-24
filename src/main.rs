@@ -76,8 +76,12 @@ fn main() {
             list_documentations(&mut current_nodes, &mut conn);
         }
         else if user_command == "tries" {
-            // List all tries nodes for the current question
+            // List all try nodes for the current question
             list_all_tries(&mut current_nodes, &mut conn);
+        }
+        else if user_command == "triesh" {
+            // List all try nodes for the current node
+            list_tries_from_node(&mut current_nodes, &mut conn);
         }
         else if user_command == "models" {
             // List all models nodes for the current question
@@ -201,6 +205,7 @@ fn print_help(current_nodes: &Vec<Node>) {
     all\t\t Show all the nodes tree\n\
     docs\t\t Lists all documentations for current question\n\
     tries\t\t List all tries for current question\n\
+    triesh\t\t List all tries for current node\n\
     models\t\t List all models for current question\n\
     terms\t\t List all terms for current question\n\
     \nADD FUNCTIONS\n\
@@ -1029,6 +1034,33 @@ fn list_all_nodes_tree(current_nodes: &mut Vec<Node>, conn: &mut my::PooledConn 
     print_cursor(current_nodes);
 }
 
+fn list_tries_from_node( current_nodes: &mut Vec<Node>, conn: &mut my::PooledConn ) {
+    let current_node: &Node = current_nodes.get( current_nodes.len() - 1).unwrap();
+    let mut collected_nodes: Vec<i32> = Vec::new();
+    get_nodes_recursive( current_node, &mut collected_nodes, conn);
+
+    collected_nodes.iter().for_each(|nid| println!("{}, ", nid));
+}
+
+fn get_nodes_recursive( from_node: &Node, collected_nodes: &mut Vec<i32>, conn: &mut my::PooledConn) {
+
+    // TODO ar trebui sa fac ca si la functia de mai jos
+    from_node.child_nodes.split(" ")
+        .map(|id| id.parse::<i32>() )
+        .map(|id_parsed| id_parsed.unwrap_or(-1) )
+        .filter(|id_parsed| *id_parsed != -1)
+        .map(|id_good| {
+            collected_nodes.push(id_good);
+            db_operations::get_node(id_good, conn)
+        })
+        .for_each(|node| {
+            match node {
+                Some(_n) => {}, //get_nodes_recursive( &n, collected_nodes, conn),
+                None => {}
+            }
+        });
+}
+
 fn print_children_at_level(child_ids: &str, level: i32, conn: &mut my::PooledConn, current_node_id: i32 ) {
     let space: String = iter::repeat("    ").take(level as usize).collect();
 
@@ -1045,7 +1077,7 @@ fn print_children_at_level(child_ids: &str, level: i32, conn: &mut my::PooledCon
                             false
                         };
 
-                        print_line_with_colors(&space, &cn.to_short_string(), cn.node_type, is_current);
+                        print_line_with_colors(&space, &mut cn, is_current, conn);
 
                         // Daca are copii, execut recursiv functia asta
                         if cn.child_nodes.len() > 0 {
@@ -1060,7 +1092,11 @@ fn print_children_at_level(child_ids: &str, level: i32, conn: &mut my::PooledCon
     });
 }
 
-fn print_line_with_colors(space: &str, desc: &str, node_type: i32, is_current: bool) {
+fn print_line_with_colors(space: &str, current_node: &mut Node, is_current: bool, conn: &mut my::PooledConn) {
+
+    let desc = current_node.to_short_string();
+    let node_type = current_node.node_type;
+
     if is_current {
         println!(" {sp}  |__ {special_back}{desc}{reset}{reset_bg}", 
                 sp = space,
@@ -1083,7 +1119,23 @@ fn print_line_with_colors(space: &str, desc: &str, node_type: i32, is_current: b
             println!(" {}  |__ {}", space, desc);
         },
         x if x == NodeType::TryNode as i32 => {
-            println!(" {}  |__ {}", space, desc);
+
+            match db_operations::get_try(current_node.node_id, conn) {
+                None => {},
+                Some(try_node) => {
+                    if try_node.result == 1 {
+                        println!(" {sp}  |__ {color}{id}{reset}{label}", 
+                                 sp = space,
+                                 color = color::Fg(color::Rgb(104,234,6)),
+                                 id = "[Ty ".to_owned() + &current_node.node_id.to_string() + "] ",
+                                 reset = color::Fg(color::Reset),
+                                 label = &current_node.label);
+                    }
+                    else {
+                        println!(" {}  |__ {}", space, desc);
+                    }
+                },
+            }
         },
         x if x == NodeType::Subquestion as i32 => {
             println!(" {sp}  |__ {color}{desc}{reset}", 
