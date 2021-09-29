@@ -13,7 +13,7 @@ pub fn connect() -> my::PooledConn {
     // parent_question este nodul question de care apartin
     if check_for_table(&mut conn, "\'nodes\'") == false {
         println!("Creating nodes table");
-        let create_table = "CREATE TABLE nodes (node_id int NOT NULL AUTO_INCREMENT PRIMARY KEY, node_type INT not null, child_nodes TEXT, parent_node INT, label TEXT NOT NULL )";
+        let create_table = "CREATE TABLE nodes (node_id int NOT NULL AUTO_INCREMENT PRIMARY KEY, node_type INT not null, child_nodes TEXT, parent_node INT, parent_question INT, label TEXT NOT NULL )";
         pool.prep_exec(create_table, ()).unwrap();
     }
 
@@ -21,7 +21,7 @@ pub fn connect() -> my::PooledConn {
     // | node_id | question_text | root_question |
     // root_question va fi 0 sau 1, subquestions vor avea root_question 0
     if check_for_table(&mut conn, "\'questions\'") == false {
-        println!("Creating table questions");
+        println!("Creating questions table");
         let create_table = "CREATE TABLE questions ( node_id INT NOT NULL, question_text TEXT NOT NULL, root_question INT NOT NULL)";
         pool.prep_exec(create_table, ()).unwrap();
     }
@@ -94,7 +94,7 @@ pub fn save_question( question_text: &String, conn: &mut my::PooledConn ) {
     // Salvez in nodes table, 
     // iau node_id, cu care s-a salvat, 
     // si salvez in questions table cu aces node_id
-    let add_node_query = "INSERT INTO mysql.nodes ( node_type, child_nodes, parent_node, parent_question, label ) VALUES(\"0\", \"\", -1, 0, \":label\");
+    let add_node_query = "INSERT INTO mysql.nodes ( node_type, child_nodes, parent_node, parent_question, label ) VALUES(\"0\", \"\", \"-1\", \"0\", \":label\");
                           SELECT LAST_INSERT_ID() INTO @id;
                           INSERT INTO mysql.questions( node_id, question_text, root_question ) VALUES( @id, \":question_text\", 1)";
     let add_node_query = add_node_query.replace(":question_text", &question_text);
