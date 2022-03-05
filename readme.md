@@ -10,21 +10,12 @@ Probably if you have a database already runnig, just change the connection url i
 BUILD
 =====
 cargo build
-cargo build --release
+cargo build --release	# Gasesc binarul in target/release/
 
 RUN
 ===
 docker run --name study-mysql -p 3306:3306 -e MYSQL_ROOT_PASSWORD=studymqsql -d mysql:latest  
 cargo run  
-
-
-TODO
-
-- daca nu gaseste /tmp/study.txt la citire, imi da crash
-- sa verific daca la mv, parintele destinatie este acelasi ca si acum
-- list all: 
-	- terms
-	- models
 
 
 MySql migration commands

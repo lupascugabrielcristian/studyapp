@@ -992,25 +992,16 @@ fn list_node(current_nodes: &mut Vec<Node>, conn: &mut my::PooledConn ) {
 
     let current_node = current_nodes.get( current_nodes.len() - 1 );
 
-    // Printez nodul parinte
-    println!("Current node: {}", current_node.unwrap().label );
 
-    // Tree sunt liniile de la inceput care arata ramificatiile
-    let tree: String = iter::repeat(" |__ ").take(1).collect();
-    
-    // Printez ce copii are
-    current_node.unwrap().child_nodes.split(" ").for_each(|child_node_id| {
-        match child_node_id.parse::<i32>() {
-            Ok(n_id) => {
-                let child_node = db_operations::get_node( n_id, conn );
-                match child_node {
-                    Some(mut cn) => { println!("{}{}", tree, &cn.to_string()) },
-                    None => {}
-                }
-            },
-            Err(_e) => {}
-        }
-    });
+    let node_description = get_node_short_string( current_node.unwrap() );
+    // Afisez primul rand. Dupa asta urmeaza tree-ul
+    println!("{}", node_description);
+
+    // Primul parametru va fi un string cu id-urile copiilor
+    let children_ids: &str = &current_node.unwrap().child_nodes;
+    let level = 0;
+    let current_id = current_node.unwrap().node_id;
+    print_children_at_level( children_ids, level, conn, current_id);
 
     print_cursor(current_nodes);
 }
@@ -1094,7 +1085,7 @@ fn print_children_at_level(child_ids: &str, level: i32, conn: &mut my::PooledCon
 
 fn print_line_with_colors(space: &str, current_node: &mut Node, is_current: bool, conn: &mut my::PooledConn) {
 
-    let desc = current_node.to_short_string();
+    let desc = get_node_short_string( current_node );
     let node_type = current_node.node_type;
 
     if is_current {
@@ -1366,4 +1357,16 @@ fn sent_content_to_temp_file( temp_file: &str, conn: &mut my::PooledConn, curren
         }
     }
 
+}
+
+fn get_node_short_string( node: &Node ) -> String {
+    let types: [&str; 7] = ["?", "D", "M", "Tm", "Ty", "?", "."];
+
+    let mut short_string = String::from("[:type ");
+    short_string += ":id] :label";
+    short_string = short_string.replace(":label", node.label.trim());
+    short_string = short_string.replace(":id", &node.node_id.to_string());
+    short_string = short_string.replace(":type", types[node.node_type as usize]);
+
+    return short_string;
 }
