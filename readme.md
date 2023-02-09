@@ -7,6 +7,11 @@ cargo # obviously
 docker # necessary to start the mysql database.  
 Probably if you have a database already runnig, just change the connection url in the code. It's hardcoded :)  
 
+SETUP  
+=====  
+sudo snap install rustup --classic  
+rustup install stable  
+
 BUILD
 =====
 cargo build
