@@ -1131,7 +1131,7 @@ fn print_line_with_colors(space: &str, current_node: &mut Node, is_current: bool
         x if x == NodeType::Subquestion as i32 => {
             println!(" {sp}  |__ {color}{desc}{reset}", 
                     sp = space,
-                    color = color::Fg(color::LightCyan),
+                    color = color::Fg(color::Rgb(229,182,0)),
                     desc = desc,
                     reset = color::Fg(color::Reset));
         },
