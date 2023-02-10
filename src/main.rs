@@ -122,6 +122,9 @@ fn main() {
             let node_to_move = &user_command[4..];
             move_to_lateral_node(node_to_move, &mut conn, &mut current_nodes);
         }
+        else if user_command == "n" {
+            move_next(&mut conn, &mut current_nodes);
+        }
         else if user_command == "term" {
             // Add new term
             add_new_term( &mut conn, &mut current_nodes );
@@ -196,6 +199,7 @@ fn print_help(current_nodes: &Vec<Node>) {
     cd [id]\t\t select node [index]\n\
     out\t\t move out of the current node\n\
     lat [id]\t go to a node of the same parent\n\
+    n\t\t (next) move inside first child\n\
     mv [id] [to_id]\t Move node with id as child to node with id to_id\n\
     \nLIST FUNCTIONS\n\
     ===============\n\
@@ -1102,7 +1106,7 @@ fn print_line_with_colors(space: &str, current_node: &mut Node, is_current: bool
         x if x == NodeType::Documentation as i32 => {
             println!(" {sp}  |__ {color}{desc}{reset}", 
                     sp = space,
-                    color = color::Fg(color::LightGreen),
+                    color = color::Fg(color::Rgb(148, 214, 255)),
                     desc = desc,
                     reset = color::Fg(color::Reset));
         },
@@ -1123,7 +1127,12 @@ fn print_line_with_colors(space: &str, current_node: &mut Node, is_current: bool
                                  label = &current_node.label);
                     }
                     else {
-                        println!(" {}  |__ {}", space, desc);
+                        println!(" {sp}  |__ {color}{id}{label}{reset}", 
+                                 sp = space,
+                                 color = color::Fg(color::Rgb(206, 100, 181)),
+                                 id = "[Ty ".to_owned() + &current_node.node_id.to_string() + "] ",
+                                 reset = color::Fg(color::Reset),
+                                 label = &current_node.label);
                     }
                 },
             }
@@ -1138,7 +1147,7 @@ fn print_line_with_colors(space: &str, current_node: &mut Node, is_current: bool
         x if x == NodeType::Term as i32 => {
             println!(" {sp}  |__ {color}{desc}{reset}", 
                     sp = space,
-                    color = color::Fg(color::Yellow),
+                    color = color::Fg(color::Rgb(255, 125, 82)),
                     desc = desc,
                     reset = color::Fg(color::Reset));
         },
@@ -1245,6 +1254,23 @@ fn move_to_lateral_node(argument: &str, conn: &mut my::PooledConn, current_nodes
             current_nodes.pop();
             select_node(argument, conn, current_nodes);
         },
+    }
+}
+
+fn move_next(conn: &mut my::PooledConn, current_nodes: &mut Vec<Node>) {
+    // Pentru a nu face immutable borrow, parsez fiecare split in i32 - primitiva
+    let current_children: Vec<i32> = current_nodes.get( current_nodes.len() - 1 ).unwrap().child_nodes.split(" ")
+            .map(|id| id.parse::<i32>() )                   // parsez valoare string a id-ului
+            .map(|id_parsed| id_parsed.unwrap_or(-1) )      // dupa parsare rezulta Result. daca este Err, atunci o scot -1
+            .filter(|id| *id != -1)
+            .collect();
+
+    if current_children.len() > 0 {
+        // Pentru a transforma i32 to &str, transform mai intai in String
+        select_node(current_children[0].to_string().as_str(), conn, current_nodes );
+    }
+    else {
+        print_all_with_content( "Err: Current node has no children!", current_nodes );
     }
 }
 
