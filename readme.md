@@ -25,3 +25,10 @@ cargo run
 
 MySql migration commands
 ALTER TABLE mysql.questions ADD COLUMN root_question int NOT NULL AFTER question_text;
+
+Bacup database
+docker exec study-mysql /usr/bin/mysqldump -u root --password=studymqsql mysql > /tmp/backup.sql
+
+For importing dump files
+docker exec -i study-test mysql -uroot -pstudymqsql mysql < /tmp/study_backup.sql
+Ref https://stackoverflow.com/questions/65585749/how-to-import-a-mysql-dump-file-into-a-docker-mysql-container
